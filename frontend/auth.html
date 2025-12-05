@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CommUnity | Login & Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Axios CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-50 flex">
+    <!-- Left hero (desktop) -->
+    <section
+      class="hidden lg:flex flex-1 bg-gradient-to-br from-primary-600 via-primary-700 to-slate-900 text-white p-10 relative overflow-hidden"
+    >
+      <div
+        class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top,_#ffffff_0,_transparent_50%)]"
+      ></div>
+      <div class="relative z-10 max-w-md flex flex-col justify-between">
+        <div>
+          <div class="flex items-center gap-2 mb-6">
+            <div
+              class="h-9 w-9 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center font-bold"
+            >
+              C
+            </div>
+            <span class="text-lg font-semibold tracking-tight">CommUnity</span>
+          </div>
+          <h1 class="text-3xl font-semibold mb-3">
+            Join clubs, host events, grow your community.
+          </h1>
+          <p class="text-sm text-slate-100/80 mb-6">
+            One platform to discover marathons, cycling groups, tech meetups,
+            workshops, and social drives — with realtime bookings and secure
+            payments.
+          </p>
+          <ul class="space-y-2 text-sm">
+            <li class="flex items-center gap-2">
+              <span>✅</span> Book events in a few taps
+            </li>
+            <li class="flex items-center gap-2">
+              <span>✅</span> Manage your club & members
+            </li>
+            <li class="flex items-center gap-2">
+              <span>✅</span> Real-time chat & updates
+            </li>
+          </ul>
+        </div>
+        <p class="text-[11px] text-slate-100/70 mt-6">
+          Built with Node.js, Express, PostgreSQL, MongoDB, JWT & Socket.io.
+        </p>
+      </div>
+    </section>
+
+    <!-- Right auth card -->
+    <section class="flex-1 flex items-center justify-center px-4 py-6">
+      <div class="w-full max-w-md">
+        <!-- Back link -->
+        <a
+          href="index.html"
+          class="inline-flex items-center gap-1 text-xs text-slate-500 mb-4 hover:text-primary-600"
+        >
+          ← Back to Home
+        </a>
+
+        <div
+          class="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 sm:p-7"
+        >
+          <!-- Tabs -->
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h2 class="text-xl font-semibold text-slate-900" id="auth-title">
+                Login
+              </h2>
+              <p class="text-xs text-slate-500" id="auth-subtitle">
+                Welcome back! Sign in to continue.
+              </p>
+            </div>
+            <div class="inline-flex bg-slate-100 rounded-full p-1 text-xs">
+              <button
+                id="tab-login"
+                class="px-3 py-1.5 rounded-full bg-white shadow text-primary-700 font-medium"
+              >
+                Login
+              </button>
+              <button
+                id="tab-register"
+                class="px-3 py-1.5 rounded-full text-slate-500 hover:text-primary-600"
+              >
+                Register
+              </button>
+            </div>
+          </div>
+
+          <!-- Alert -->
+          <div
+            id="auth-alert"
+            class="hidden mb-3 text-xs rounded-md px-3 py-2"
+          ></div>
+
+          <!-- Login form -->
+          <form id="login-form" class="space-y-4">
+            <div class="space-y-1">
+              <label class="text-xs font-medium text-slate-600">Email</label>
+              <input
+                type="email"
+                id="login-email"
+                class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+
+            <div class="space-y-1">
+              <label class="text-xs font-medium text-slate-600">Password</label>
+              <input
+                type="password"
+                id="login-password"
+                class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              id="login-submit"
+              class="w-full inline-flex items-center justify-center gap-2 mt-1 text-sm font-medium rounded-xl bg-primary-600 text-white py-2.5 hover:bg-primary-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              Login
+            </button>
+          </form>
+
+          <!-- Register form -->
+          <form id="register-form" class="space-y-4 hidden mt-2">
+            <div class="space-y-1">
+              <label class="text-xs font-medium text-slate-600"
+                >Full name</label
+              >
+              <input
+                type="text"
+                id="register-name"
+                class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="Your full name"
+                required
+              />
+            </div>
+
+            <div class="space-y-1">
+              <label class="text-xs font-medium text-slate-600">Email</label>
+              <input
+                type="email"
+                id="register-email"
+                class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+
+            <div class="space-y-1">
+              <label class="text-xs font-medium text-slate-600">Password</label>
+              <input
+                type="password"
+                id="register-password"
+                class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="Minimum 4 characters"
+                required
+              />
+            </div>
+
+            <div class="space-y-1">
+              <label class="text-xs font-medium text-slate-600"
+                >City (optional)</label
+              >
+              <input
+                type="text"
+                id="register-city"
+                class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="Bangalore"
+              />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label class="text-xs font-medium text-slate-600"
+                  >Lat (optional)</label
+                >
+                <input
+                  type="number"
+                  step="any"
+                  id="register-lat"
+                  class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="20.2961"
+                />
+              </div>
+              <div class="space-y-1">
+                <label class="text-xs font-medium text-slate-600"
+                  >Lng (optional)</label
+                >
+                <input
+                  type="number"
+                  step="any"
+                  id="register-lng"
+                  class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="85.8245"
+                />
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <label class="text-xs font-medium text-slate-600">Role</label>
+              <select
+                id="register-role"
+                class="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                <option value="USER">User</option>
+                <option value="HOST">Host</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              id="register-submit"
+              class="w-full inline-flex items-center justify-center gap-2 mt-1 text-sm font-medium rounded-xl bg-primary-600 text-white py-2.5 hover:bg-primary-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              Create account
+            </button>
+          </form>
+
+          <p class="mt-4 text-[11px] text-slate-500 text-center">
+            By continuing, you agree to our terms and privacy policy.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <script src="js/index.js" defer></script>
+    <script src="js/auth.js" defer></script>
+  </body>
+</html>

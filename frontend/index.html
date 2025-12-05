@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CommUnity | Discover Events Near You</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Axios CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-50 flex flex-col">
+    <!-- Navbar -->
+    <header class="sticky top-0 z-30 bg-white/80 backdrop-blur shadow-sm">
+      <div
+        class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16"
+      >
+        <!-- Logo -->
+        <a href="index.html" class="flex items-center gap-2">
+          <div
+            class="h-8 w-8 rounded-xl bg-primary-600 flex items-center justify-center text-white font-bold"
+          >
+            C
+          </div>
+          <span class="font-semibold text-lg text-slate-900 tracking-tight">
+            CommUnity
+          </span>
+        </a>
+
+        <!-- Center Search -->
+        <form id="nav-search-form" class="hidden md:flex flex-1 max-w-md mx-6">
+          <div
+            class="flex w-full bg-slate-100 rounded-full overflow-hidden shadow-inner"
+          >
+            <input
+              id="nav-search-input"
+              type="text"
+              placeholder="Search events or clubs..."
+              class="flex-1 px-4 py-2 bg-transparent outline-none text-sm"
+            />
+            <button
+              type="submit"
+              class="px-4 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 transition"
+            >
+              Search
+            </button>
+          </div>
+        </form>
+
+        <!-- Right side auth / user -->
+        <div class="flex items-center gap-3">
+          <a
+            id="nav-login-btn"
+            href="auth.html#login"
+            class="hidden sm:inline-flex px-4 py-2 text-sm font-medium text-slate-700 hover:text-primary-600 transition"
+          >
+            Login
+          </a>
+          <a
+            id="nav-register-btn"
+            href="auth.html#register"
+            class="inline-flex px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-full shadow-sm transition"
+          >
+            Register
+          </a>
+
+          <!-- User dropdown (shown when logged in) -->
+          <div id="nav-user-menu" class="hidden relative">
+            <button
+              id="nav-user-button"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 transition"
+            >
+              <div
+                id="nav-user-avatar"
+                class="h-8 w-8 rounded-full bg-primary-600 text-white flex items-center justify-center text-sm font-semibold"
+              >
+                U
+              </div>
+              <span
+                id="nav-user-name"
+                class="hidden sm:inline text-sm font-medium text-slate-800"
+              >
+                User
+              </span>
+            </button>
+
+            <!-- Dropdown -->
+            <div
+              id="nav-user-dropdown"
+              class="absolute right-0 mt-2 w-40 bg-white border border-slate-100 rounded-xl shadow-lg py-1 text-sm hidden"
+            >
+              <a
+                href="dashboard.html"
+                class="block px-3 py-2 hover:bg-slate-50"
+              >
+                Dashboard
+              </a>
+              <button
+                id="nav-logout-btn"
+                class="w-full text-left px-3 py-2 hover:bg-slate-50 text-red-600"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-1">
+      <!-- Hero Section -->
+      <section class="bg-gradient-to-b from-primary-50 to-slate-50">
+        <div
+          class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 lg:py-20 grid md:grid-cols-2 gap-10 items-center"
+        >
+          <!-- Left -->
+          <div>
+            <span
+              class="inline-flex items-center px-3 py-1 rounded-full bg-white shadow text-xs font-medium text-primary-700 mb-4"
+            >
+              🚀 New — Event discovery for clubs & communities
+            </span>
+            <h1
+              class="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 tracking-tight mb-4"
+            >
+              Discover <span class="text-primary-600">Events Near You</span>
+            </h1>
+            <p class="text-slate-600 text-sm sm:text-base mb-6 max-w-xl">
+              Marathons, cycling, tech meetups, workshops, social drives & more
+              — all in one place. Join communities, book events, and never miss
+              what’s happening around you.
+            </p>
+
+            <!-- Location + CTA -->
+            <div class="space-y-3">
+              <div class="flex flex-col sm:flex-row gap-3">
+                <div
+                  class="flex-1 flex items-center gap-2 bg-white rounded-full shadow-inner px-3 py-1.5"
+                >
+                  <span class="text-slate-400 text-sm">📍</span>
+                  <input
+                    id="location-input"
+                    type="text"
+                    placeholder="Enter your city or area"
+                    class="flex-1 px-1 py-1 text-sm bg-transparent outline-none"
+                  />
+                  <button
+                    id="use-location-btn"
+                    type="button"
+                    class="text-xs sm:text-sm font-medium text-primary-600 hover:text-primary-700"
+                  >
+                    Use my location
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap gap-3">
+                <a
+                  href="#events-section"
+                  class="inline-flex items-center px-5 py-2.5 rounded-full text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 shadow-md shadow-primary-100 transition"
+                >
+                  Explore Events
+                </a>
+                <a
+                  href="auth.html#register"
+                  class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium text-primary-700 bg-white hover:bg-slate-50 border border-slate-100 shadow-sm transition"
+                >
+                  Become a Host
+                </a>
+              </div>
+            </div>
+
+            <!-- Trust badges -->
+            <div class="mt-6 flex flex-wrap gap-4 text-xs text-slate-500">
+              <div class="flex items-center gap-1.5">
+                <span>✅</span> Safe payments
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span>✅</span> Real-time bookings
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span>✅</span> Curated communities
+              </div>
+            </div>
+          </div>
+
+          <!-- Right (simple mock hero cards) -->
+          <div class="hidden md:flex justify-center">
+            <div class="grid gap-3">
+              <div class="bg-white rounded-2xl shadow-md p-4 w-72">
+                <p class="text-xs font-medium text-primary-600 mb-1">
+                  Today · 6:00 AM
+                </p>
+                <p class="font-semibold text-slate-900 text-sm mb-1">
+                  10K Marathon — City Run
+                </p>
+                <p class="text-xs text-slate-500 mb-3">
+                  Bhubaneswar · Fitness & Sports
+                </p>
+                <span
+                  class="inline-flex px-2 py-0.5 rounded-full text-[11px] bg-green-50 text-green-700"
+                >
+                  Trending · Limited seats
+                </span>
+              </div>
+              <div
+                class="bg-white rounded-2xl shadow-md p-4 w-72 translate-x-6"
+              >
+                <p class="text-xs font-medium text-primary-600 mb-1">
+                  Saturday · 4:00 PM
+                </p>
+                <p class="font-semibold text-slate-900 text-sm mb-1">
+                  React & Node.js Dev Meetup
+                </p>
+                <p class="text-xs text-slate-500 mb-3">
+                  Online · Tech Community
+                </p>
+                <span
+                  class="inline-flex px-2 py-0.5 rounded-full text-[11px] bg-sky-50 text-sky-700"
+                >
+                  Free · Community
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Filters Row -->
+      <section
+        id="filters-section"
+        class="sticky top-16 z-20 bg-slate-50/90 backdrop-blur border-b border-slate-100"
+      >
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div class="flex flex-wrap gap-3 items-center">
+            <!-- City -->
+            <div class="flex flex-col">
+              <label class="text-[11px] font-medium text-slate-500 mb-0.5"
+                >City</label
+              >
+              <select
+                id="filter-city"
+                class="min-w-[120px] text-xs rounded-full border border-slate-200 bg-white px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                <option value="">Any</option>
+                <option value="Bhubaneswar">Bhubaneswar</option>
+                <option value="Bangalore">Bangalore</option>
+                <option value="Kolkata">Kolkata</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Mumbai">Mumbai</option>
+                <option value="Delhi">Delhi</option>
+              </select>
+            </div>
+
+            <!-- Category -->
+            <div class="flex flex-col">
+              <label class="text-[11px] font-medium text-slate-500 mb-0.5"
+                >Category</label
+              >
+              <select
+                id="filter-category"
+                class="min-w-[140px] text-xs rounded-full border border-slate-200 bg-white px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                <option value="">All</option>
+                <option value="Fitness">Marathons & Fitness</option>
+                <option value="Cycling">Cycling</option>
+                <option value="Tech">Tech & Meetups</option>
+                <option value="Workshops">Workshops</option>
+                <option value="Social">Social & Community</option>
+              </select>
+            </div>
+
+            <!-- Date -->
+            <div class="flex flex-col">
+              <label class="text-[11px] font-medium text-slate-500 mb-0.5"
+                >Date</label
+              >
+              <input
+                id="filter-date"
+                type="date"
+                class="text-xs rounded-full border border-slate-200 bg-white px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+            </div>
+
+            <!-- Free / Paid toggle -->
+            <div class="flex flex-col">
+              <label class="text-[11px] font-medium text-slate-500 mb-0.5"
+                >Price</label
+              >
+              <div
+                class="inline-flex text-xs bg-white rounded-full border border-slate-200 overflow-hidden"
+              >
+                <button
+                  id="filter-price-any"
+                  type="button"
+                  class="px-3 py-1.5 text-[11px] sm:text-xs font-medium bg-primary-50 text-primary-700"
+                >
+                  Any
+                </button>
+                <button
+                  id="filter-price-free"
+                  type="button"
+                  class="px-3 py-1.5 text-[11px] sm:text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  Free
+                </button>
+                <button
+                  id="filter-price-paid"
+                  type="button"
+                  class="px-3 py-1.5 text-[11px] sm:text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  Paid
+                </button>
+              </div>
+            </div>
+
+            <!-- Radius slider (UI only for now) -->
+            <div class="hidden sm:flex flex-col">
+              <label class="text-[11px] font-medium text-slate-500 mb-0.5"
+                >Radius (km)</label
+              >
+              <div class="flex items-center gap-2">
+                <input
+                  id="filter-radius"
+                  type="range"
+                  min="5"
+                  max="50"
+                  step="5"
+                  value="20"
+                  class="w-28"
+                />
+                <span
+                  id="filter-radius-label"
+                  class="text-[11px] text-slate-500"
+                  >20 km</span
+                >
+              </div>
+            </div>
+
+            <!-- Reset -->
+            <button
+              id="filter-reset"
+              type="button"
+              class="ml-auto text-[11px] sm:text-xs text-slate-500 hover:text-primary-600"
+            >
+              Reset filters
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Event Cards Grid -->
+      <section id="events-section" class="py-6 sm:py-8 lg:py-10">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <!-- Header -->
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-lg sm:text-xl font-semibold text-slate-900">
+                Events near you
+              </h2>
+              <p class="text-xs sm:text-sm text-slate-500">
+                Based on your location & filters.
+              </p>
+            </div>
+            <div class="text-xs text-slate-500">
+              <span id="events-count">0</span> events found
+            </div>
+          </div>
+
+          <!-- Grid -->
+          <div
+            id="events-grid"
+            class="grid gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3"
+          >
+            <!-- Cards rendered by index.js -->
+          </div>
+
+          <!-- Empty state -->
+          <div
+            id="events-empty"
+            class="hidden border border-dashed border-slate-200 rounded-2xl mt-6 p-6 flex flex-col items-center text-center"
+          >
+            <p class="text-sm font-medium text-slate-800 mb-1">
+              No events match your filters
+            </p>
+            <p class="text-xs text-slate-500 mb-3">
+              Try changing the city, category or date range.
+            </p>
+            <button
+              id="events-empty-reset"
+              class="px-4 py-2 text-xs font-medium rounded-full bg-primary-600 text-white hover:bg-primary-700"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-100 bg-white">
+      <div
+        class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs text-slate-500"
+      >
+        <span
+          >© <span id="year-span"></span> CommUnity. Built for clubs &
+          communities.</span
+        >
+        <span>Made with ❤️ using Node.js, PostgreSQL & MongoDB.</span>
+      </div>
+    </footer>
+
+    <script src="js/index.js" defer></script>
+  </body>
+</html>

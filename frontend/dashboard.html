@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CommUnity | Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Axios CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-50 flex flex-col">
+    <!-- Navbar (same as home, slightly simplified) -->
+    <header class="sticky top-0 z-30 bg-white/80 backdrop-blur shadow-sm">
+      <div
+        class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16"
+      >
+        <!-- Logo -->
+        <a href="index.html" class="flex items-center gap-2">
+          <div
+            class="h-8 w-8 rounded-xl bg-primary-600 flex items-center justify-center text-white font-bold"
+          >
+            C
+          </div>
+          <span class="font-semibold text-lg text-slate-900 tracking-tight">
+            CommUnity
+          </span>
+        </a>
+
+        <!-- Right user & logout -->
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <div
+              id="dash-user-avatar"
+              class="h-8 w-8 rounded-full bg-primary-600 text-white flex items-center justify-center text-sm font-semibold"
+            >
+              U
+            </div>
+            <div class="flex flex-col">
+              <span
+                id="dash-user-name"
+                class="text-sm font-medium text-slate-900"
+              >
+                User
+              </span>
+              <span
+                id="dash-user-role"
+                class="text-[11px] text-slate-500 uppercase tracking-wide"
+              >
+                ROLE
+              </span>
+            </div>
+          </div>
+          <button
+            id="dash-logout-btn"
+            class="text-xs font-medium text-slate-600 hover:text-red-600"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-1">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <!-- Heading -->
+        <div class="mb-5">
+          <h1 class="text-xl sm:text-2xl font-semibold text-slate-900 mb-1">
+            Dashboard
+          </h1>
+          <p class="text-xs sm:text-sm text-slate-500">
+            Your basic profile from
+            <code class="px-1.5 py-0.5 rounded bg-slate-100 text-[11px]"
+              >/auth/me</code
+            >
+          </p>
+        </div>
+
+        <!-- Alert -->
+        <div
+          id="dash-alert"
+          class="hidden mb-3 text-xs rounded-md px-3 py-2"
+        ></div>
+
+        <!-- Profile card -->
+        <div class="grid md:grid-cols-3 gap-4">
+          <div
+            class="md:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4"
+          >
+            <div>
+              <h2 class="text-sm font-semibold text-slate-900 mb-1">Profile</h2>
+              <p class="text-xs text-slate-500">
+                These values come directly from your PostgreSQL
+                <strong>User</strong> table.
+              </p>
+            </div>
+
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <dt class="text-slate-500">Name</dt>
+                <dd id="dash-field-name" class="font-medium text-slate-900">
+                  —
+                </dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">Email</dt>
+                <dd
+                  id="dash-field-email"
+                  class="font-medium text-slate-900 break-all"
+                >
+                  —
+                </dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">Role</dt>
+                <dd id="dash-field-role" class="font-medium text-slate-900">
+                  —
+                </dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">City</dt>
+                <dd id="dash-field-city" class="font-medium text-slate-900">
+                  —
+                </dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">Latitude</dt>
+                <dd id="dash-field-lat" class="font-medium text-slate-900">
+                  —
+                </dd>
+              </div>
+              <div>
+                <dt class="text-slate-500">Longitude</dt>
+                <dd id="dash-field-lng" class="font-medium text-slate-900">
+                  —
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- Small card to hint future features -->
+          <div
+            class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between"
+          >
+            <div>
+              <h2 class="text-sm font-semibold text-slate-900 mb-1">
+                Next phases
+              </h2>
+              <p class="text-xs text-slate-500 mb-3">
+                In Phase 2, this dashboard will show your upcoming bookings,
+                hosted events, and club memberships.
+              </p>
+            </div>
+            <div class="space-y-2 text-xs text-slate-500">
+              <div class="flex items-center gap-2">
+                <span>📅</span> Upcoming events
+              </div>
+              <div class="flex items-center gap-2">
+                <span>👥</span> Clubs you’ve joined
+              </div>
+              <div class="flex items-center gap-2">
+                <span>💳</span> Wallet & payments (for hosts)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="js/index.js" defer></script>
+    <script src="js/dashboard.js" defer></script>
+  </body>
+</html>

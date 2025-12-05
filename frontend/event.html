@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CommUnity | Event Details</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["system-ui", "ui-sans-serif", "sans-serif"],
+            },
+            colors: {
+              primary: {
+                500: "#4f46e5",
+                600: "#4338ca",
+              },
+              accent: "#22c55e",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
+  >
+    <!-- Navbar -->
+    <nav
+      class="border-b border-white/5 bg-slate-950/60 backdrop-blur-lg sticky top-0 z-20"
+    >
+      <div
+        class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14"
+      >
+        <a href="dashboard.html" class="flex items-center gap-2">
+          <div
+            class="h-8 w-8 rounded-2xl bg-gradient-to-tr from-primary-500 to-accent flex items-center justify-center shadow-lg shadow-primary-500/40"
+          >
+            <span class="font-bold text-sm">CE</span>
+          </div>
+          <span class="font-semibold tracking-tight text-sm sm:text-base">
+            CommUnity
+          </span>
+        </a>
+
+        <div class="flex items-center gap-4 text-xs sm:text-sm">
+          <a
+            href="dashboard.html"
+            class="text-slate-300 hover:text-white transition"
+            >Home</a
+          >
+          <a
+            href="clubs.html"
+            class="text-slate-300 hover:text-white transition"
+            >Clubs</a
+          >
+        </div>
+      </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <a
+        href="dashboard.html"
+        class="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-950/70 hover:bg-slate-900/80 transition"
+      >
+        ← Back to home
+      </a>
+
+      <section
+        id="event-card"
+        class="backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl shadow-2xl shadow-black/40 p-6 sm:p-8 space-y-4"
+      >
+        <p id="event-loading" class="text-xs text-slate-400">
+          Loading event...
+        </p>
+        <p
+          id="event-error"
+          class="hidden text-xs text-rose-300 bg-rose-900/30 border border-rose-500/40 rounded-xl px-3 py-2"
+        ></p>
+
+        <div id="event-content" class="hidden space-y-4"></div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="./eventDetails.js"></script>
+  </body>
+</html>
