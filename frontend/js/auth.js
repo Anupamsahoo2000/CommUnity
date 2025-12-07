@@ -1,5 +1,4 @@
 // js/auth.js
-
 document.addEventListener("DOMContentLoaded", () => {
   const tabLogin = document.getElementById("tab-login");
   const tabRegister = document.getElementById("tab-register");
@@ -79,6 +78,14 @@ document.addEventListener("DOMContentLoaded", () => {
     switchToLogin();
   }
 
+  // Utility for storing auth and attaching header immediately
+  function setAuthAndAttach(token, user) {
+    saveAuth(token, user);
+    if (window.axios) {
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
   // Login submit
   if (loginForm) {
     const emailInput = document.getElementById("login-email");
@@ -109,8 +116,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!token) {
           showAlert("error", "No token received from server.");
         } else {
-          // Save auth in localStorage
-          saveAuth(token, user);
+          // Save auth in localStorage and attach header for immediate API usage
+          setAuthAndAttach(token, user);
+
           showAlert("success", "Login successful! Redirecting...");
 
           setTimeout(() => {
@@ -179,7 +187,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!token) {
           showAlert("error", "No token received from server.");
         } else {
-          saveAuth(token, user);
+          setAuthAndAttach(token, user);
           showAlert("success", "Account created! Redirecting to dashboard...");
           setTimeout(() => {
             window.location.href = "index.html";

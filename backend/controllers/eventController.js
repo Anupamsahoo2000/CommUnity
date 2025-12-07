@@ -3,6 +3,11 @@
 const axios = require("axios");
 const { Event, TicketType, Club } = require("../models/sql/index");
 const { listEvents } = require("../services/eventServices"); // ensure this filename/path exists
+const {
+  getEventTicketsWithAvailability,
+  getEventSeatsSummary,
+} = require("../services/seatsService");
+
 // If your service file is named differently, update the path above.
 
 const geocodeCache = new Map();
@@ -373,8 +378,71 @@ const getEvents = async (req, res) => {
   }
 };
 
+// GET /api/events/:id/tickets
+// Returns ticket types for an event with availability
+const getEventTickets = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+
+    const event = await Event.findByPk(eventId, {
+      attributes: ["id", "title", "status"],
+    });
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    if (event.status !== "PUBLISHED") {
+      // you can relax this if you want hosts to see tickets for drafts
+      // but for public endpoint it's safer to require published
+      return res
+        .status(400)
+        .json({ message: "Tickets are only available for published events" });
+    }
+
+    const { tickets, summary } = await getEventTicketsWithAvailability(eventId);
+
+    return res.json({
+      eventId: event.id,
+      eventTitle: event.title,
+      tickets,
+      summary,
+    });
+  } catch (err) {
+    console.error("getEventTickets error:", err);
+    return res.status(500).json({ message: "Failed to load event tickets" });
+  }
+};
+
+// GET /api/events/:id/seats
+// Lightweight seats summary for live counters / polling
+const getEventSeats = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+
+    const event = await Event.findByPk(eventId, {
+      attributes: ["id", "title", "status"],
+    });
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    const summary = await getEventSeatsSummary(eventId);
+
+    return res.json({
+      eventId: event.id,
+      eventTitle: event.title,
+      ...summary,
+    });
+  } catch (err) {
+    console.error("getEventSeats error:", err);
+    return res.status(500).json({ message: "Failed to load seats summary" });
+  }
+};
+
 module.exports = {
   getEvents,
   createEvent,
   updateEvent,
+  getEventTickets,
+  getEventSeats,
 };

@@ -5,11 +5,17 @@ const {
   getEvents,
   createEvent,
   updateEvent,
+  getEventTickets,
+  getEventSeats,
 } = require("../controllers/eventController");
 const authenticate = require("../middleware/jwt");
 
 // Public list
 router.get("/", getEvents);
+
+// Public seats / ticket availability
+router.get("/:id/tickets", getEventTickets);
+router.get("/:id/seats", getEventSeats);
 
 // Protected: create (HOST or ADMIN)
 router.post("/", authenticate(["HOST", "ADMIN"]), createEvent);

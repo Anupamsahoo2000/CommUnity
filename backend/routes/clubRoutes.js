@@ -11,6 +11,7 @@ const {
   joinClub,
   getClubMembers,
   deleteClub,
+  leaveClub,
 } = require("../controllers/clubController");
 
 // Public listing & details
@@ -32,5 +33,6 @@ router.post("/:id/join", authenticate(), joinClub);
 
 // Members (requires authenticated)
 router.get("/:id/members", authenticate(), getClubMembers);
+router.post("/:id/leave", authenticate(), leaveClub);
 
 module.exports = router;

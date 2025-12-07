@@ -1,5 +1,5 @@
-// backend/src/controllers/club.controller.js
-const { Op, QueryTypes } = require("sequelize");
+// backend/src/controllers/clubController.js
+const sequelize = require("sequelize");
 const {
   Club,
   ClubMember,
@@ -7,6 +7,7 @@ const {
   User,
   TicketType,
 } = require("../models/sql/index");
+const { Op, QueryTypes } = sequelize;
 
 // Simple slugify helper (same style as events)
 function slugify(text = "") {
@@ -62,7 +63,7 @@ const createClub = async (req, res) => {
     let slug = providedSlug
       ? slugify(providedSlug)
       : slugify(`${name}-${city || ""}`);
-    // if slug exists, append short suffix
+    // if slug exists, append short suffix (safe)
     const existing = await Club.findOne({ where: { slug } });
     if (existing) {
       slug = `${slug}-${Date.now().toString(36).slice(-6)}`;
@@ -126,7 +127,7 @@ const listClubs = async (req, res) => {
     const perPage = Math.max(1, Math.min(100, Number(limit) || 12));
     const offset = (pageNum - 1) * perPage;
 
-    // If lat/lng & radius provided use Haversine raw SQL (similar to events service)
+    // If lat/lng & radius provided use Haversine raw SQL
     if (lat && lng && radiusKm) {
       const latNum = Number(lat);
       const lngNum = Number(lng);
@@ -233,29 +234,103 @@ const listClubs = async (req, res) => {
 /**
  * GET /api/clubs/:id
  * Returns club details + its events (published)
+ * Also enriches with memberCount, upcomingCount, isMember, canManage, members (sample)
  */
 const getClub = async (req, res) => {
   try {
     const id = req.params.id;
+    const requester = req.user;
+
     // Accept both uuid and slug
     const club = await Club.findOne({
       where: {
         [Op.or]: [{ id }, { slug: id }],
       },
-      include: [
-        {
-          model: Event,
-          as: "events",
-          where: { status: "PUBLISHED" },
-          required: false,
-          limit: 20,
-          order: [["startTime", "ASC"]],
-        },
-      ],
+      // do not eagerly load everything here; we'll load events and members separately for control
     });
 
     if (!club) return res.status(404).json({ message: "Club not found" });
-    return res.json({ club });
+
+    // Fetch published upcoming events (limit)
+    const upcomingEvents = await Event.findAll({
+      where: {
+        clubId: club.id,
+        status: "PUBLISHED",
+        startTime: { [Op.gte]: new Date() },
+      },
+      order: [["startTime", "ASC"]],
+      limit: 20,
+      attributes: ["id", "title", "startTime", "bannerUrl", "slug", "city"],
+    });
+
+    // Member counts
+    const memberCountRes = await ClubMember.count({
+      where: { clubId: club.id, status: "ACTIVE" },
+    });
+    const pendingCountRes = await ClubMember.count({
+      where: { clubId: club.id, status: "PENDING" },
+    });
+
+    // optionally include a small members list for public view (limited)
+    const members = await ClubMember.findAll({
+      where: { clubId: club.id, status: "ACTIVE" },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "name", "email", "city"],
+        },
+      ],
+      order: [["createdAt", "ASC"]],
+      limit: 30,
+    });
+
+    // check membership for requester
+    let isMember = false;
+    if (requester) {
+      const m = await ClubMember.findOne({
+        where: { clubId: club.id, userId: requester.id, status: "ACTIVE" },
+      });
+      isMember = !!m;
+    }
+
+    const canManage = await isOwnerOrAdmin(requester, club);
+
+    // Build response shape expected by frontend
+    const payload = {
+      id: club.id,
+      name: club.name,
+      slug: club.slug,
+      description: club.description,
+      about: club.description, // keep both names for frontend convenience
+      category: club.category,
+      city: club.city,
+      bannerUrl: club.bannerUrl,
+      logoUrl: club.logoUrl || null,
+      memberCount: Number(memberCountRes || 0),
+      pendingCount: Number(pendingCountRes || 0),
+      upcomingCount: upcomingEvents.length,
+      upcomingEvents: upcomingEvents.map((e) => ({
+        id: e.id,
+        title: e.title,
+        startTime: e.startTime,
+        bannerUrl: e.bannerUrl,
+        slug: e.slug,
+        city: e.city,
+      })),
+      members: (members || []).map((m) => ({
+        id: m.user?.id || m.userId,
+        name: m.user?.name || null,
+        email: m.user?.email || null,
+        role: m.role,
+      })),
+      isMember,
+      canManage,
+      visibility: club.visibility || "Public",
+      createdAt: club.createdAt,
+    };
+
+    return res.json({ club: payload });
   } catch (err) {
     console.error("getClub error:", err);
     return res.status(500).json({ message: "Failed to load club" });
@@ -359,6 +434,42 @@ const joinClub = async (req, res) => {
 };
 
 /**
+ * POST /api/clubs/:id/leave
+ * Auth required: current user leaves the club (deletes ClubMember row)
+ */
+const leaveClub = async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    const requester = req.user;
+    if (!requester) return res.status(401).json({ message: "Unauthorized" });
+
+    const membership = await ClubMember.findOne({
+      where: { clubId, userId: requester.id },
+    });
+
+    if (!membership) {
+      return res.status(404).json({ message: "Membership not found" });
+    }
+
+    // Prevent owner from leaving without transfer (owner must delete or transfer)
+    if (membership.role === "OWNER") {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Owner cannot leave the club. Transfer ownership or delete the club.",
+        });
+    }
+
+    await ClubMember.destroy({ where: { id: membership.id } });
+    return res.json({ message: "Left club successfully" });
+  } catch (err) {
+    console.error("leaveClub error:", err);
+    return res.status(500).json({ message: "Failed to leave club" });
+  }
+};
+
+/**
  * GET /api/clubs/:id/members
  * Query: status (ACTIVE|PENDING|REJECTED), role (OWNER|MODERATOR|MEMBER)
  * Only club owner / ADMIN or requester who is a member can view (privacy).
@@ -427,11 +538,9 @@ const deleteClub = async (req, res) => {
     const allowed = await isOwnerOrAdmin(requester, club);
     if (!allowed) {
       await t.rollback();
-      return res
-        .status(403)
-        .json({
-          message: "Forbidden: only club owner or admin may delete the club",
-        });
+      return res.status(403).json({
+        message: "Forbidden: only club owner or admin may delete the club",
+      });
     }
 
     if (force) {
@@ -484,6 +593,7 @@ module.exports = {
   getClub,
   updateClub,
   joinClub,
+  leaveClub,
   getClubMembers,
   deleteClub,
 };

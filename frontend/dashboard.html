@@ -89,12 +89,6 @@
           <h1 class="text-xl sm:text-2xl font-semibold text-slate-900 mb-1">
             Dashboard
           </h1>
-          <p class="text-xs sm:text-sm text-slate-500">
-            Your basic profile from
-            <code class="px-1.5 py-0.5 rounded bg-slate-100 text-[11px]"
-              >/auth/me</code
-            >
-          </p>
         </div>
 
         <!-- Alert -->
@@ -102,6 +96,179 @@
           id="dash-alert"
           class="hidden mb-3 text-xs rounded-md px-3 py-2"
         ></div>
+
+        <!-- Create Event (Host only) — hidden by default -->
+        <section id="create-event-section" class="mt-6">
+          <div
+            class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5"
+          >
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-sm font-semibold text-slate-900">
+                  Create an Event
+                </h2>
+                <p class="text-xs text-slate-500">
+                  Hosts can create events here. Publish only when location is
+                  resolvable.
+                </p>
+              </div>
+
+              <!-- Toggle button: initially visible -->
+              <button
+                id="create-event-toggle-btn"
+                class="inline-flex items-center px-3 py-2 rounded-full bg-primary-600 text-white text-sm"
+              >
+                Create Event
+              </button>
+            </div>
+
+            <!-- Form container: hidden by default -->
+            <div id="create-event-form-wrap" class="hidden">
+              <form
+                id="create-event-form"
+                class="grid grid-cols-1 md:grid-cols-2 gap-3"
+              >
+                <div class="col-span-1">
+                  <label class="text-xs text-slate-500">Title</label>
+                  <input
+                    id="evt-title"
+                    type="text"
+                    required
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs text-slate-500">Category</label>
+                  <select
+                    id="evt-category"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  >
+                    <option value="">General</option>
+                    <option value="Fitness">Fitness</option>
+                    <option value="Cycling">Cycling</option>
+                    <option value="Tech">Tech</option>
+                    <option value="Workshops">Workshops</option>
+                    <option value="Social">Social</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="text-xs text-slate-500">City</label>
+                  <input
+                    id="evt-city"
+                    type="text"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs text-slate-500"
+                    >Location (address)</label
+                  >
+                  <input
+                    id="evt-location"
+                    type="text"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs text-slate-500">Start time</label>
+                  <input
+                    id="evt-start"
+                    type="datetime-local"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs text-slate-500"
+                    >End time (optional)</label
+                  >
+                  <input
+                    id="evt-end"
+                    type="datetime-local"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs text-slate-500">Max seats</label>
+                  <input
+                    id="evt-seats"
+                    type="number"
+                    min="1"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs text-slate-500">Price (₹)</label>
+                  <input
+                    id="evt-price"
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                    placeholder="0 for free"
+                  />
+                </div>
+
+                <div class="md:col-span-2">
+                  <label class="text-xs text-slate-500">Description</label>
+                  <textarea
+                    id="evt-desc"
+                    rows="4"
+                    class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200"
+                  ></textarea>
+                </div>
+
+                <div class="md:col-span-2 flex items-center gap-3">
+                  <label class="inline-flex items-center gap-2 text-xs">
+                    <input id="evt-publish" type="checkbox" class="rounded" />
+                    <span class="text-xs text-slate-500"
+                      >Publish now (Require resolvable location)</span
+                    >
+                  </label>
+
+                  <button
+                    id="evt-create-btn"
+                    type="button"
+                    class="ml-auto inline-flex items-center px-4 py-2 rounded-full bg-primary-600 text-white text-sm"
+                  >
+                    Create
+                  </button>
+
+                  <!-- Cancel hides the form -->
+                  <button
+                    id="evt-cancel-btn"
+                    type="button"
+                    class="inline-flex items-center px-3 py-2 rounded-full bg-white text-sm border border-slate-200 text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div
+                  id="evt-create-result"
+                  class="md:col-span-2 text-sm hidden"
+                ></div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- My Bookings -->
+        <section id="my-bookings-section" class="mt-6">
+          <h2 class="text-sm font-semibold text-slate-900 mb-2">My Bookings</h2>
+          <div id="bookings-list" class="space-y-3">
+            <!-- booking cards injected here -->
+          </div>
+          <div id="bookings-empty" class="hidden text-sm text-slate-500 mt-3">
+            No bookings yet.
+          </div>
+        </section>
 
         <!-- Profile card -->
         <div class="grid md:grid-cols-3 gap-4">

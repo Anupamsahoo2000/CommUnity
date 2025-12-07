@@ -1,91 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <title>CommUnity | Event Details</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+    <meta charset="utf-8" />
+    <title>CommUnity — Event details</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ["system-ui", "ui-sans-serif", "sans-serif"],
-            },
-            colors: {
-              primary: {
-                500: "#4f46e5",
-                600: "#4338ca",
-              },
-              accent: "#22c55e",
-            },
-          },
-        },
-      };
-    </script>
-  </head>
-  <body
-    class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100"
-  >
-    <!-- Navbar -->
-    <nav
-      class="border-b border-white/5 bg-slate-950/60 backdrop-blur-lg sticky top-0 z-20"
-    >
-      <div
-        class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14"
-      >
-        <a href="dashboard.html" class="flex items-center gap-2">
-          <div
-            class="h-8 w-8 rounded-2xl bg-gradient-to-tr from-primary-500 to-accent flex items-center justify-center shadow-lg shadow-primary-500/40"
-          >
-            <span class="font-bold text-sm">CE</span>
-          </div>
-          <span class="font-semibold tracking-tight text-sm sm:text-base">
-            CommUnity
-          </span>
-        </a>
 
-        <div class="flex items-center gap-4 text-xs sm:text-sm">
-          <a
-            href="dashboard.html"
-            class="text-slate-300 hover:text-white transition"
-            >Home</a
-          >
-          <a
-            href="clubs.html"
-            class="text-slate-300 hover:text-white transition"
-            >Clubs</a
-          >
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <!-- Socket.io client for chat -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <style>
+      .card-shadow {
+        box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+      }
+      .chat-box {
+        width: 320px;
+        max-width: calc(100% - 24px);
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 min-h-screen">
+    <header class="bg-white shadow-sm">
+      <div
+        class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between"
+      >
+        <a href="index.html" class="font-semibold text-lg text-primary-700"
+          >CommUnity</a
+        >
+        <div class="text-sm text-slate-600">
+          <a href="index.html" class="hover:text-primary-600">Back</a>
         </div>
       </div>
-    </nav>
+    </header>
 
-    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <a
-        href="dashboard.html"
-        class="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-950/70 hover:bg-slate-900/80 transition"
-      >
-        ← Back to home
-      </a>
+    <main
+      class="max-w-7xl mx-auto mt-6 px-4 grid grid-cols-1 lg:grid-cols-3 gap-6"
+    >
+      <!-- LEFT: banner + meta + description -->
+      <section class="lg:col-span-2">
+        <div id="event-loading" class="text-center py-12">Loading event...</div>
 
-      <section
-        id="event-card"
-        class="backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl shadow-2xl shadow-black/40 p-6 sm:p-8 space-y-4"
-      >
-        <p id="event-loading" class="text-xs text-slate-400">
-          Loading event...
-        </p>
-        <p
+        <article
+          id="event-card"
+          class="hidden bg-white rounded-2xl card-shadow overflow-hidden"
+        >
+          <div id="event-banner" class="h-72 bg-gray-100"></div>
+
+          <div class="p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h1
+                  id="event-title"
+                  class="text-2xl font-semibold text-slate-900"
+                ></h1>
+                <div class="mt-1 text-sm text-slate-500" id="event-tags"></div>
+                <p id="event-meta" class="text-sm text-slate-500 mt-2"></p>
+              </div>
+
+              <div class="text-right">
+                <div class="text-xs text-slate-500 mb-1">Seats left</div>
+                <div
+                  id="seats-left"
+                  class="text-xl font-semibold text-slate-900"
+                >
+                  —
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="mt-6 prose max-w-none text-slate-700"
+              id="event-desc"
+            ></div>
+
+            <div class="mt-6 bg-slate-50 rounded-lg p-4">
+              <h3 class="text-sm font-semibold mb-2">What’s included</h3>
+              <ul
+                id="event-includes"
+                class="list-disc ml-5 text-sm text-slate-600"
+              ></ul>
+
+              <h3 class="text-sm font-semibold mt-4 mb-2">
+                Rules & Cancellation
+              </h3>
+              <div id="event-rules" class="text-sm text-slate-600"></div>
+            </div>
+          </div>
+        </article>
+
+        <div
           id="event-error"
-          class="hidden text-xs text-rose-300 bg-rose-900/30 border border-rose-500/40 rounded-xl px-3 py-2"
-        ></p>
-
-        <div id="event-content" class="hidden space-y-4"></div>
+          class="hidden mt-6 text-center text-red-600"
+        ></div>
       </section>
+
+      <!-- RIGHT: ticket panel -->
+      <aside class="lg:col-span-1">
+        <div class="sticky top-24">
+          <div class="bg-white rounded-2xl p-4 card-shadow">
+            <div class="mb-3">
+              <div class="text-xs text-slate-500">Price</div>
+              <div id="ticket-base-price" class="text-xl font-semibold">—</div>
+            </div>
+
+            <!-- ticket types -->
+            <div id="ticket-types" class="space-y-3 mb-3"></div>
+
+            <!-- price breakdown -->
+            <div class="border-t border-slate-100 pt-3 space-y-2">
+              <div class="flex justify-between text-sm text-slate-600">
+                <span>Base price</span><span id="break-base">—</span>
+              </div>
+              <div class="flex justify-between text-sm text-slate-600">
+                <span>Platform fee</span><span id="break-fee">—</span>
+              </div>
+              <div class="flex justify-between text-sm font-semibold">
+                <span>Total</span><span id="break-total">—</span>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <button
+                id="book-now-btn"
+                class="w-full px-4 py-2 rounded-full bg-primary-600 text-white disabled:opacity-60"
+              >
+                Book Now
+              </button>
+            </div>
+
+            <div id="booking-result" class="mt-3 text-sm hidden"></div>
+          </div>
+
+          <!-- Chat widget -->
+          <div
+            id="chat-widget"
+            class="mt-4 chat-box fixed right-4 bottom-6 bg-white rounded-2xl shadow-lg overflow-hidden hidden"
+          >
+            <div class="p-3 border-b flex items-center justify-between">
+              <div class="text-sm font-semibold">Event Chat</div>
+              <button id="chat-close-btn" class="text-xs text-slate-500">
+                Close
+              </button>
+            </div>
+            <div
+              id="chat-messages"
+              class="p-3 h-56 overflow-y-auto text-sm"
+            ></div>
+            <div class="p-3 border-t">
+              <div class="flex gap-2">
+                <input
+                  id="chat-input"
+                  class="flex-1 px-3 py-2 border rounded-full text-sm"
+                  placeholder="Say hi to participants..."
+                />
+                <button
+                  id="chat-send"
+                  class="px-3 py-2 rounded-full bg-primary-600 text-white text-sm"
+                >
+                  Send
+                </button>
+              </div>
+              <div id="chat-typing" class="text-xs text-slate-500 mt-2 hidden">
+                Someone is typing...
+              </div>
+            </div>
+          </div>
+
+          <button
+            id="open-chat-btn"
+            class="mt-3 w-full px-4 py-2 text-sm rounded-full bg-white border hover:bg-slate-50"
+          >
+            Open Event Chat
+          </button>
+        </div>
+      </aside>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="./eventDetails.js"></script>
+    <script src="js/event.js" defer></script>
   </body>
 </html>
