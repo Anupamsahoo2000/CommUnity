@@ -223,7 +223,7 @@ async function loadEvent() {
 
   try {
     // NOTE: using /api/events/:id
-    const res = await axios.get(`/api/events/${id}`);
+    const res = await axios.get(`/events/${id}`);
     const event = res?.data?.event || res?.data;
     if (!event) throw new Error("Event not found");
 
@@ -293,7 +293,7 @@ async function loadEvent() {
     // ticket types: prefer dedicated endpoint
     let ticketTypes = [];
     try {
-      const tResp = await axios.get(`/api/events/${id}/tickets`);
+      const tResp = await axios.get(`/events/${id}/tickets`);
       const data = tResp?.data || {};
       // backend may return { tickets: [...] } or an array directly
       ticketTypes = data.tickets || data.data || data || [];
@@ -353,7 +353,7 @@ function startSeatsLive(eventId) {
   if (seatPollInterval) clearInterval(seatPollInterval);
   seatPollInterval = setInterval(async () => {
     try {
-      const r = await axios.get(`/api/events/${eventId}/seats`);
+      const r = await axios.get(`/events/${eventId}/seats`);
       const seatsLeft = r?.data?.seatsLeft ?? r?.data?.remaining ?? null;
       if (seatsLeft !== undefined) updateSeatsDisplay(seatsLeft);
     } catch (e) {
@@ -428,7 +428,7 @@ async function bookNow() {
 
   try {
     // 1) Create booking
-    const bookingResp = await axios.post("/api/bookings", payload, {
+    const bookingResp = await axios.post("/bookings", payload, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const booking = bookingResp?.data?.booking || bookingResp?.data;
@@ -444,7 +444,7 @@ async function bookNow() {
 
     // 2) Create Cashfree order for this booking
     const payResp = await axios.post(
-      "/api/payments/create-order",
+      "/payments/create-order",
       { bookingId: booking.id },
       {
         headers: { Authorization: `Bearer ${token}` },
@@ -531,7 +531,7 @@ function setupChat(eventId) {
         socket.emit("chat_message", { eventId, text });
       } else {
         // REST fallback
-        await axios.post(`/api/events/${eventId}/chat`, { text });
+        await axios.post(`/events/${eventId}/chat`, { text });
       }
     } catch (err) {
       console.warn("Failed to send chat message", err);

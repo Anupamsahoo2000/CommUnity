@@ -297,7 +297,7 @@ async function loadEventsFromApi() {
       params.date_to = filtersState.date;
     }
 
-    const res = await axios.get("/api/events", { params });
+    const res = await axios.get("/events", { params });
     const payload = res.data || {};
     let events = payload.data || payload.events || [];
 

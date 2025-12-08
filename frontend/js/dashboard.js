@@ -72,7 +72,7 @@ async function loadMyBookings() {
   }
 
   try {
-    const r = await axios.get("/api/bookings/me", {
+    const r = await axios.get("/bookings/me", {
       headers: { Authorization: `Bearer ${token}` },
     });
     const bookings = r?.data?.data || r?.data || [];
@@ -96,7 +96,7 @@ async function loadMyBookings() {
         if (!confirm("Cancel this booking?")) return;
         try {
           await axios.post(
-            `/api/bookings/${id}/cancel`,
+            `/bookings/${id}/cancel`,
             {},
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -305,7 +305,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       };
 
       try {
-        const r = await axios.post("/api/events", payload);
+        const r = await axios.post("/events", payload);
         const created = r?.data?.event || r?.data;
         if (created) {
           resBox.classList.remove("hidden");
