@@ -1,7 +1,8 @@
+// js/index.js
 
 // ---------- Axios base config ----------
 if (window.axios) {
-  axios.defaults.baseURL = "http://localhost:5000"; // backend
+  axios.defaults.baseURL = "http://localhost:5000"; // same server as backend
   axios.defaults.headers["Content-Type"] = "application/json";
 }
 
@@ -36,13 +37,15 @@ function clearAuth() {
   localStorage.removeItem(STORAGE_USER_KEY);
 }
 
-// Attach token to axios if present
-(function attachTokenToAxios() {
+// Attach auth header helper
+function authConfig(extra = {}) {
   const token = getToken();
+  const headers = extra.headers || {};
   if (token) {
-    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
-})();
+  return { ...extra, headers };
+}
 
 // ---------- Navbar setup ----------
 function setupNavbar() {
@@ -58,6 +61,7 @@ function setupNavbar() {
   const token = getToken && getToken();
   const user = getStoredUser && getStoredUser();
 
+  // Hide login/register if logged in
   if (token && user) {
     if (loginBtn) {
       loginBtn.classList.add("hidden");
@@ -97,8 +101,6 @@ function setupNavbar() {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
       clearAuth && clearAuth();
-      // remove axios header too
-      delete axios.defaults.headers.common["Authorization"];
       window.location.href = "index.html";
     });
   }
@@ -123,9 +125,7 @@ function setupLocationControls() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
-        // set the input to lat,lng for clarity but also store last position for radius-based backend queries
         locationInput.value = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-        window._lastDetectedPosition = { lat: Number(latitude), lng: Number(longitude) };
         useLocationBtn.disabled = false;
         useLocationBtn.textContent = "Use my location";
       },
@@ -138,101 +138,7 @@ function setupLocationControls() {
   });
 }
 
-// ---------- Dummy events (fallback) ----------
-const dummyEvents = [
-  {
-    id: 1,
-    title: "10K City Marathon",
-    city: "Bhubaneswar",
-    category: "Fitness",
-    startTime: "2025-12-06T06:00:00.000Z",
-    priceType: "PAID",
-    basePrice: 499,
-    tag: "Trending",
-    bannerUrl:
-      "https://images.pexels.com/photos/2402777/pexels-photo-2402777.jpeg?auto=compress&cs=tinysrgb&w=800",
-    isFree: false,
-  },
-  {
-    id: 2,
-    title: "Sunday Cycling Meetup",
-    city: "Bangalore",
-    category: "Cycling",
-    startTime: "2025-12-07T07:00:00.000Z",
-    priceType: "FREE",
-    basePrice: 0,
-    tag: "Limited Seats",
-    bannerUrl:
-      "https://images.pexels.com/photos/276517/pexels-photo-276517.jpeg?auto=compress&cs=tinysrgb&w=800",
-    isFree: true,
-  },
-  {
-    id: 3,
-    title: "Full-Stack JS Dev Meetup",
-    city: "Hyderabad",
-    category: "Tech",
-    startTime: "2025-12-10T16:00:00.000Z",
-    priceType: "FREE",
-    basePrice: 0,
-    tag: "Community",
-    bannerUrl:
-      "https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&cs=tinysrgb&w=800",
-    isFree: true,
-  },
-];
-
-// ---------- Render a single event card (handles backend or dummy shapes) ----------
-function renderEventCard(ev) {
-  // ev: supports backend fields (id, title, startTime, city, category, isFree, basePrice, bannerUrl, tag)
-  const card = document.createElement("article");
-  card.className =
-    "bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col hover:shadow-md transition";
-
-  const banner = ev.bannerUrl || ev.banner || "";
-  const dateStr = ev.startTime ? new Date(ev.startTime).toLocaleDateString() : "";
-  const timeStr = ev.startTime ? new Date(ev.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
-  const priceLabel = ev.isFree || ev.priceType === "FREE" ? "Free" : `₹${ev.basePrice ?? ev.basePrice ?? 0}`;
-
-  card.innerHTML = `
-    <div class="h-36 w-full overflow-hidden bg-gray-100">
-      ${
-        banner
-          ? `<img src="${banner}" alt="${ev.title || ''}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">`
-          : `<div class="w-full h-full flex items-center justify-center text-slate-400">No image</div>`
-      }
-    </div>
-    <div class="flex-1 flex flex-col p-3.5">
-      <div class="flex items-center justify-between gap-2 mb-1.5">
-        <p class="text-[11px] font-medium text-primary-600">
-          ${dateStr} · ${timeStr}
-        </p>
-        <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600">
-          ${ev.tag || ev.status || ""}
-        </span>
-      </div>
-      <h3 class="text-sm font-semibold text-slate-900 line-clamp-2 mb-1">
-        ${ev.title || "Untitled Event"}
-      </h3>
-      <p class="text-[11px] text-slate-500 mb-2">
-        ${ev.city || ""} · ${ev.category || ""}
-      </p>
-      <div class="mt-auto flex items-center justify-between pt-2 border-t border-slate-100">
-        <div class="flex flex-col">
-          ${
-            (ev.isFree || ev.priceType === "FREE")
-              ? `<span class="text-xs font-semibold text-emerald-600">Free</span>`
-              : `<span class="text-xs font-semibold text-slate-900">${priceLabel}</span>`
-          }
-          <span class="text-[10px] text-slate-400">${(ev.isFree || ev.priceType === "FREE") ? "Limited spots" : "Per person"}</span>
-        </div>
-        <a href="event.html?id=${ev.id}" class="text-[11px] font-medium px-3 py-1.5 rounded-full bg-primary-600 text-white hover:bg-primary-700 transition">View Details</a>
-      </div>
-    </div>
-  `;
-  return card;
-}
-
-// ---------- Render array of events ----------
+// ---------- Render events from API ----------
 function renderEvents(events) {
   const grid = document.getElementById("events-grid");
   const countSpan = document.getElementById("events-count");
@@ -252,170 +158,274 @@ function renderEvents(events) {
   countSpan.textContent = String(events.length);
 
   events.forEach((ev) => {
-    const card = renderEventCard(ev);
+    const card = document.createElement("article");
+    card.className =
+      "bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col hover:shadow-md transition";
+
+    // derive fields from backend event model
+    const banner =
+      ev.bannerUrl ||
+      "https://images.pexels.com/photos/2402777/pexels-photo-2402777.jpeg?auto=compress&cs=tinysrgb&w=800";
+
+    const city = ev.city || "Online";
+    const category = ev.category || "Events";
+
+    let dateStr = "Date TBA";
+    let timeStr = "";
+    if (ev.startTime) {
+      const d = new Date(ev.startTime);
+      dateStr = d.toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      });
+      timeStr = d.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    const isFree =
+      ev.isFree === true || Number(ev.basePrice || 0) === 0 || !ev.basePrice;
+    const priceType = isFree ? "FREE" : "PAID";
+    const price = Number(ev.basePrice || 0);
+
+    const tag =
+      ev.status === "PUBLISHED"
+        ? "Available"
+        : ev.status === "DRAFT"
+        ? "Draft"
+        : "Upcoming";
+
+    card.innerHTML = `
+      <div class="h-36 w-full overflow-hidden">
+        <img
+          src="${banner}"
+          alt="${ev.title || "Event"}"
+          class="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+        />
+      </div>
+      <div class="flex-1 flex flex-col p-3.5">
+        <div class="flex items-center justify-between gap-2 mb-1.5">
+          <p class="text-[11px] font-medium text-primary-600">
+            ${dateStr}${timeStr ? " · " + timeStr : ""}
+          </p>
+          <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600">
+            ${tag}
+          </span>
+        </div>
+        <h3 class="text-sm font-semibold text-slate-900 line-clamp-2 mb-1">
+          ${ev.title || "Event"}
+        </h3>
+        <p class="text-[11px] text-slate-500 mb-2">
+          ${city} · ${category}
+        </p>
+        <div class="mt-auto flex items-center justify-between pt-2 border-t border-slate-100">
+          <div class="flex flex-col">
+            ${
+              isFree
+                ? `<span class="text-xs font-semibold text-emerald-600">Free</span>`
+                : `<span class="text-xs font-semibold text-slate-900">₹${price.toFixed(
+                    0
+                  )}</span>`
+            }
+            <span class="text-[10px] text-slate-400">${
+              isFree ? "Limited spots" : "Per person"
+            }</span>
+          </div>
+          <button
+            class="text-[11px] font-medium px-3 py-1.5 rounded-full bg-primary-600 text-white hover:bg-primary-700 transition"
+            data-event-id="${ev.id}"
+          >
+            View Details
+          </button>
+        </div>
+      </div>
+    `;
+
+    // wire up View Details → event.html?id=...
+    const btn = card.querySelector("[data-event-id]");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-event-id");
+        if (id) {
+          window.location.href = `event.html?id=${id}`;
+        }
+      });
+    }
+
     grid.appendChild(card);
   });
 }
 
-// ---------- Fetch events from backend (with filters) ----------
-async function fetchEventsFromApi(params = {}) {
-  // params: q, city, category, date_from, date_to, price, lat, lng, radiusKm, page, limit
+// ---------- API loading + filters ----------
+
+// in-memory filters state
+const filtersState = {
+  q: "",
+  city: "",
+  category: "",
+  date: "",
+  price: "ANY", // ANY | FREE | PAID
+};
+
+async function loadEventsFromApi() {
+  const grid = document.getElementById("events-grid");
+  const emptyState = document.getElementById("events-empty");
+  const countSpan = document.getElementById("events-count");
+
+  if (emptyState) emptyState.classList.add("hidden");
+  if (grid)
+    grid.innerHTML = `
+    <div class="col-span-full text-xs text-slate-500">
+      Loading events...
+    </div>
+  `;
+  if (countSpan) countSpan.textContent = "...";
+
   try {
-    const resp = await axios.get("/events", { params });
-    // Expect { data: [...], meta: {...} }
-    if (resp?.data?.data) {
-      return { ok: true, data: resp.data.data, meta: resp.data.meta || {} };
+    const params = {
+      limit: 24,
+    };
+
+    if (filtersState.q) params.q = filtersState.q;
+    if (filtersState.city) params.city = filtersState.city;
+    if (filtersState.category) params.category = filtersState.category;
+    if (filtersState.date) {
+      // same day range
+      params.date_from = filtersState.date;
+      params.date_to = filtersState.date;
     }
-    return { ok: true, data: resp.data || [], meta: {} };
+
+    const res = await axios.get("/api/events", { params });
+    const payload = res.data || {};
+    let events = payload.data || payload.events || [];
+
+    // client-side filter by price type
+    if (filtersState.price === "FREE") {
+      events = events.filter(
+        (e) =>
+          e.isFree === true || Number(e.basePrice || 0) === 0 || !e.basePrice
+      );
+    } else if (filtersState.price === "PAID") {
+      events = events.filter(
+        (e) => e.isFree === false && Number(e.basePrice || 0) > 0
+      );
+    }
+
+    renderEvents(events);
   } catch (err) {
-    console.warn("fetchEventsFromApi failed:", err?.response?.data || err.message || err);
-    return { ok: false, error: err };
-  }
-}
-
-// ---------- Collect filters from UI ----------
-function collectFiltersForBackend() {
-  const q = (document.getElementById("nav-search-input")?.value || "").trim();
-  const city = document.getElementById("filter-city")?.value || "";
-  const category = document.getElementById("filter-category")?.value || "";
-  const date = document.getElementById("filter-date")?.value || "";
-  const radius = document.getElementById("filter-radius")?.value || "";
-  const priceAny = document.getElementById("filter-price-any");
-  const priceFree = document.getElementById("filter-price-free");
-  const pricePaid = document.getElementById("filter-price-paid");
-
-  let price = undefined;
-  if (priceFree && priceFree.classList.contains("bg-primary-50")) price = "FREE";
-  if (pricePaid && pricePaid.classList.contains("bg-primary-50")) price = "PAID";
-
-  const params = {};
-  if (q) params.q = q;
-  if (city) params.city = city;
-  if (category) params.category = category;
-  if (date) params.date_from = date; // backend supports date_from / date_to
-  if (date) params.date_to = date;
-  if (price) params.price = price;
-
-  if (radius) {
-    const num = Number(radius);
-    if (!Number.isNaN(num) && num > 0) {
-      params.radiusKm = num;
-      // attach last detected geo if available
-      if (window._lastDetectedPosition && window._lastDetectedPosition.lat && window._lastDetectedPosition.lng) {
-        params.lat = window._lastDetectedPosition.lat;
-        params.lng = window._lastDetectedPosition.lng;
-      }
+    console.error("Failed to load events:", err);
+    if (grid) {
+      grid.innerHTML = `
+        <div class="col-span-full text-xs text-red-600">
+          Failed to load events. Please try again later.
+        </div>
+      `;
     }
+    if (countSpan) countSpan.textContent = "0";
   }
-
-  return params;
 }
 
-// ---------- Wiring filters UI to fetching ----------
 function setupFilters() {
-  const searchForm = document.getElementById("nav-search-form");
   const searchInput = document.getElementById("nav-search-input");
+  const searchForm = document.getElementById("nav-search-form");
   const citySelect = document.getElementById("filter-city");
   const categorySelect = document.getElementById("filter-category");
   const dateInput = document.getElementById("filter-date");
   const radiusInput = document.getElementById("filter-radius");
+  const radiusLabel = document.getElementById("filter-radius-label");
   const priceAnyBtn = document.getElementById("filter-price-any");
   const priceFreeBtn = document.getElementById("filter-price-free");
   const pricePaidBtn = document.getElementById("filter-price-paid");
   const resetBtn = document.getElementById("filter-reset");
   const emptyResetBtn = document.getElementById("events-empty-reset");
 
-  // Keep a simple state to track which price is active by toggling classes exactly like your UI expects.
-  function setPriceState(state) {
-    // state: "ANY" | "FREE" | "PAID"
-    const mapToClasses = (active) =>
-      active
-        ? "px-3 py-1.5 text-[11px] sm:text-xs font-medium bg-primary-50 text-primary-700"
-        : "px-3 py-1.5 text-[11px] sm:text-xs font-medium text-slate-600 hover:bg-slate-50";
-
-    if (priceAnyBtn) priceAnyBtn.className = mapToClasses(state === "ANY");
-    if (priceFreeBtn) priceFreeBtn.className = mapToClasses(state === "FREE");
-    if (pricePaidBtn) pricePaidBtn.className = mapToClasses(state === "PAID");
+  if (radiusInput && radiusLabel) {
+    radiusInput.addEventListener("input", () => {
+      radiusLabel.textContent = `${radiusInput.value} km`;
+    });
   }
 
-  // Event that triggers fetch
-  async function applyAndFetch() {
-    const params = collectFiltersForBackend();
-    // page/limit can be added if you implement pagination server-side
-    const result = await fetchEventsFromApi(params);
-    if (result.ok) {
-      renderEvents(result.data);
-    } else {
-      // fallback to dummy
-      renderEvents(dummyEvents);
-    }
+  function applyFilters() {
+    filtersState.q = (searchInput?.value || "").trim();
+    filtersState.city = citySelect?.value || "";
+    filtersState.category = categorySelect?.value || "";
+    filtersState.date = dateInput?.value || "";
+    loadEventsFromApi();
   }
 
-  // Search submit
+  // Search form submit
   if (searchForm) {
     searchForm.addEventListener("submit", (e) => {
       e.preventDefault();
-      applyAndFetch();
+      applyFilters();
     });
   }
 
-  // quick apply when pressing Enter in the big hero search (if exists)
-  const heroSearch = document.getElementById("location-input");
-  if (heroSearch) {
-    heroSearch.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        applyAndFetch();
-      }
-    });
-  }
-
-  // on change handlers
+  // Other filters trigger immediate reload
   [citySelect, categorySelect, dateInput].forEach((el) => {
     if (!el) return;
-    el.addEventListener("change", applyAndFetch);
+    el.addEventListener("change", applyFilters);
   });
 
-  if (radiusInput) {
-    radiusInput.addEventListener("input", () => {
-      const label = document.getElementById("filter-radius-label");
-      if (label) label.textContent = `${radiusInput.value} km`;
-    });
-    radiusInput.addEventListener("change", applyAndFetch);
+  // Price toggle buttons
+  function setPriceFilter(newFilter) {
+    filtersState.price = newFilter;
+
+    if (priceAnyBtn) {
+      priceAnyBtn.className =
+        "px-3 py-1.5 text-[11px] sm:text-xs font-medium " +
+        (filtersState.price === "ANY"
+          ? "bg-primary-50 text-primary-700"
+          : "text-slate-600 hover:bg-slate-50");
+    }
+    if (priceFreeBtn) {
+      priceFreeBtn.className =
+        "px-3 py-1.5 text-[11px] sm:text-xs font-medium " +
+        (filtersState.price === "FREE"
+          ? "bg-primary-50 text-primary-700"
+          : "text-slate-600 hover:bg-slate-50");
+    }
+    if (pricePaidBtn) {
+      pricePaidBtn.className =
+        "px-3 py-1.5 text-[11px] sm:text-xs font-medium " +
+        (filtersState.price === "PAID"
+          ? "bg-primary-50 text-primary-700"
+          : "text-slate-600 hover:bg-slate-50");
+    }
+
+    loadEventsFromApi();
   }
 
-  if (priceAnyBtn) priceAnyBtn.addEventListener("click", () => { setPriceState("ANY"); applyAndFetch(); });
-  if (priceFreeBtn) priceFreeBtn.addEventListener("click", () => { setPriceState("FREE"); applyAndFetch(); });
-  if (pricePaidBtn) pricePaidBtn.addEventListener("click", () => { setPriceState("PAID"); applyAndFetch(); });
+  if (priceAnyBtn)
+    priceAnyBtn.addEventListener("click", () => setPriceFilter("ANY"));
+  if (priceFreeBtn)
+    priceFreeBtn.addEventListener("click", () => setPriceFilter("FREE"));
+  if (pricePaidBtn)
+    pricePaidBtn.addEventListener("click", () => setPriceFilter("PAID"));
 
-  if (resetBtn) {
-    resetBtn.addEventListener("click", () => {
-      if (searchInput) searchInput.value = "";
-      if (citySelect) citySelect.value = "";
-      if (categorySelect) categorySelect.value = "";
-      if (dateInput) dateInput.value = "";
-      if (radiusInput) radiusInput.value = "20";
-      setPriceState("ANY");
-      renderEvents(dummyEvents);
-    });
+  // Reset
+  function resetFilters() {
+    if (searchInput) searchInput.value = "";
+    if (citySelect) citySelect.value = "";
+    if (categorySelect) categorySelect.value = "";
+    if (dateInput) dateInput.value = "";
+    if (radiusInput) radiusInput.value = "20";
+    if (radiusLabel) radiusLabel.textContent = "20 km";
+    filtersState.q = "";
+    filtersState.city = "";
+    filtersState.category = "";
+    filtersState.date = "";
+    setPriceFilter("ANY"); // also triggers loadEventsFromApi
   }
 
-  if (emptyResetBtn) {
-    emptyResetBtn.addEventListener("click", () => {
-      if (searchInput) searchInput.value = "";
-      if (citySelect) citySelect.value = "";
-      if (categorySelect) categorySelect.value = "";
-      if (dateInput) dateInput.value = "";
-      if (radiusInput) radiusInput.value = "20";
-      setPriceState("ANY");
-      renderEvents(dummyEvents);
-    });
-  }
+  if (resetBtn) resetBtn.addEventListener("click", () => resetFilters());
+  if (emptyResetBtn)
+    emptyResetBtn.addEventListener("click", () => resetFilters());
 
-  // initial apply
-  setPriceState("ANY");
-  // Try an initial backend fetch, fallback to dummy
-  applyAndFetch();
+  // Initial load from API
+  loadEventsFromApi();
 }
 
 // ---------- Common footer year ----------

@@ -4,6 +4,8 @@ const sequelize = require("./config/db");
 const mongo = require("./config/mongo");
 const cors = require("cors");
 const path = require("path");
+const http = require("http");
+const { initSocket } = require("./config/socket");
 
 const PORT = process.env.PORT || 5000;
 
@@ -14,12 +16,15 @@ app.use(express.json());
 const authRoutes = require("./routes/authRoutes");
 const clubRoutes = require("./routes/clubRoutes");
 const eventRoutes = require("./routes/eventRoutes");
+const bookingRoutes = require("./routes/bookingRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 // Use routes
 app.use("/auth", authRoutes);
 app.use("/clubs", clubRoutes);
 app.use("/events", eventRoutes);
-
+app.use("/bookings", bookingRoutes);
+app.use("/payments", paymentRoutes);
 (async () => {
   try {
     await sequelize.authenticate();
@@ -32,7 +37,10 @@ app.use("/events", eventRoutes);
 
 app.use(express.static(path.join(__dirname, "../frontend")));
 
+const server = http.createServer(app);
+initSocket(server);
+
 // Start the server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
