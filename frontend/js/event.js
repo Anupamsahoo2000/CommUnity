@@ -38,8 +38,8 @@ function getParam(name) {
 
 // simple platform fee calc (example: 5% + ₹10)
 function calcPlatformFee(base, qty) {
-  const percent = 0.05;
-  const flat = 10;
+  const percent = 0.02;
+  const flat = 0;
   return Math.round(base * qty * percent + flat);
 }
 

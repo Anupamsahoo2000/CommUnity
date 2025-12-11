@@ -1,7 +1,7 @@
 // backend/controllers/paymentController.js
 const { Cashfree, CFEnvironment } = require("cashfree-pg");
 require("dotenv").config();
-const sequelize = require("sequelize");
+const sequelize = require("../config/db");
 
 const {
   Booking,
@@ -38,14 +38,8 @@ const BASE_URL = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
 /**
  * ✅ 1️⃣ Create Cashfree order for an existing booking
  *
- * POST /api/payments/create-order
+ * POST /payments/create-order
  * Body: { bookingId }
- *
- * - Looks up Booking + Payment
- * - Ensures booking is PENDING
- * - Calls Cashfree PGCreateOrder
- * - Saves providerOrderId in Payment
- * - Returns payment_session_id + order_id to frontend
  */
 const createOrderForBooking = async (req, res) => {
   const t = await sequelize.transaction();
@@ -115,12 +109,11 @@ const createOrderForBooking = async (req, res) => {
       order_id: cashfreeOrderId,
       customer_details: {
         customer_id: String(booking.userId),
-        customer_phone: "9999999999", // TODO: add phone field in User model if needed
+        customer_phone: "9999999999", // TODO: add phone in User later
         customer_email: booking.user?.email || "customer@example.com",
         customer_name: booking.user?.name || "Customer",
       },
       order_meta: {
-        // Redirect after payment completion
         return_url: `${BASE_URL}/index.html?booking_id=${booking.id}&order_id=${cashfreeOrderId}`,
       },
       order_note: booking.event
@@ -135,7 +128,7 @@ const createOrderForBooking = async (req, res) => {
     const data = response.data;
     console.log("✅ Cashfree order created:", data);
 
-    // Save providerOrderId (+ any raw payload if you like)
+    // Save providerOrderId + raw payload
     payment.providerOrderId = cashfreeOrderId;
     payment.status = "INITIATED";
     payment.rawPayload = data;
@@ -148,15 +141,17 @@ const createOrderForBooking = async (req, res) => {
       bookingId: booking.id,
       order_id: cashfreeOrderId,
       payment_session_id: data.payment_session_id,
-      // Frontend will use this session_id in Cashfree Drop-in or JS SDK
     });
   } catch (error) {
     console.error(
       "❌ Error creating Cashfree order:",
       error.response?.data || error
     );
-    await sequelize.transaction().rollback?.(); // in case we didn't get 't'
-
+    try {
+      await t.rollback();
+    } catch (e) {
+      // ignore
+    }
     return res.status(500).json({
       success: false,
       message: "Failed to create Cashfree order",
@@ -165,24 +160,16 @@ const createOrderForBooking = async (req, res) => {
 };
 
 /**
- * ✅ 2️⃣ Webhook to auto-update booking/payment status (called by Cashfree)
+ * ✅ 2️⃣ Webhook to auto-update booking/payment status (Cashfree → us)
  *
- * POST /api/payments/cashfree/webhook
- * - Verify signature (TODO, depends on how you configure webhooks)
- * - Update Payment + Booking
- * - TODO: credit wallet, generate QR, emit sockets
+ * POST /payments/cashfree/webhook
  */
 const paymentWebhook = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    // NOTE: In a real app, you must verify the webhook signature here
-    // using the raw body + Cashfree secret. This is left as a TODO.
-
     const event = req.body;
     console.log("📦 Cashfree webhook received:", event);
 
-    // Cashfree PG webhooks usually nest data; this is a generic example:
-    // Try to be defensive:
     const orderId =
       event?.data?.order?.order_id || event?.order_id || event?.order?.order_id;
     const orderStatus =
@@ -294,13 +281,11 @@ const paymentWebhook = async (req, res) => {
         }
       }
     } else if (payment.status === "FAILED") {
-      // Optionally mark booking FAILED/CANCELLED if pending
       if (booking.status === "PENDING") {
         booking.status = "CANCELLED";
         await booking.save({ transaction: t });
       }
     } else if (payment.status === "REFUNDED") {
-      // If you support refunds, adjust wallet and booking
       if (booking.status === "CONFIRMED") {
         booking.status = "REFUNDED";
         await booking.save({ transaction: t });
@@ -311,7 +296,9 @@ const paymentWebhook = async (req, res) => {
     return res.status(200).send("Webhook processed successfully");
   } catch (err) {
     console.error("❌ Error processing Cashfree webhook:", err);
-    await t.rollback();
+    try {
+      await t.rollback();
+    } catch (e) {}
     return res.status(500).send("Webhook processing failed");
   }
 };
@@ -319,7 +306,7 @@ const paymentWebhook = async (req, res) => {
 /**
  * ✅ 3️⃣ Route to check payment status via Cashfree API
  *
- * GET /api/payments/check/:orderId
+ * GET /payments/check/:orderId
  */
 const checkPaymentStatus = async (req, res) => {
   try {
@@ -345,12 +332,11 @@ const checkPaymentStatus = async (req, res) => {
       orderStatus = orderData.order_status || "PENDING";
     }
 
-    // Optionally, force SUCCESS in dev for easier testing
     if (process.env.NODE_ENV === "development") {
-      orderStatus = "SUCCESS";
+      // Optional shortcut
+      // orderStatus = "SUCCESS";
     }
 
-    // Update DB Payment + Booking status
     const payment = await Payment.findOne({
       where: { providerOrderId: orderId },
       include: [{ model: Booking, as: "booking" }],
@@ -390,7 +376,7 @@ const checkPaymentStatus = async (req, res) => {
 /**
  * ✅ 4️⃣ Simple API to read payment status from DB
  *
- * GET /api/payments/order/:orderId
+ * GET /payments/order/:orderId
  */
 const orderStatusFromDb = async (req, res) => {
   try {

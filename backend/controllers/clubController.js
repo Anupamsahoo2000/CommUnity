@@ -1,5 +1,5 @@
 // backend/src/controllers/clubController.js
-const sequelize = require("sequelize");
+const sequelize = require("../config/db");
 const {
   Club,
   ClubMember,
@@ -7,7 +7,7 @@ const {
   User,
   TicketType,
 } = require("../models/sql/index");
-const { Op, QueryTypes } = sequelize;
+const { Op, QueryTypes } = require("sequelize");
 
 // Simple slugify helper (same style as events)
 function slugify(text = "") {

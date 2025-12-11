@@ -1,4 +1,3 @@
-// backend/src/routes/event.routes.js
 const express = require("express");
 const router = express.Router();
 const {
@@ -7,20 +6,42 @@ const {
   updateEvent,
   getEventTickets,
   getEventSeats,
+  getEventById,
+  createTicketType,
+  getEventChat,
+  postEventChat,
+  uploadEventBanner,
 } = require("../controllers/eventController");
 const authenticate = require("../middleware/jwt");
+const upload = require("../middleware/upload");
 
 // Public list
 router.get("/", getEvents);
 
-// Public seats / ticket availability
+// Public tickets & seats
 router.get("/:id/tickets", getEventTickets);
 router.get("/:id/seats", getEventSeats);
 
-// Protected: create (HOST or ADMIN)
-router.post("/", authenticate(["HOST", "ADMIN"]), createEvent);
+// Public single event (MUST come after /tickets and /seats)
+router.get("/:id", getEventById);
 
-// Protected: update (organizer/club-owner check performed in controller)
+// Host/Admin: create ticket type for an event
+router.post("/:id/tickets", authenticate(["HOST", "ADMIN"]), createTicketType);
+
+// 🔹 Event chat
+router.get("/:id/chat", getEventChat);
+router.post("/:id/chat", authenticate(), postEventChat);
+
+// Upload banner image for an event
+router.post(
+  ":/id/banner",
+  authenticate(["HOST", "ADMIN"]),
+  upload.single("banner"),
+  uploadEventBanner
+);
+
+// Protected: create / update event
+router.post("/", authenticate(["HOST", "ADMIN"]), createEvent);
 router.put("/:id", authenticate(["HOST", "ADMIN"]), updateEvent);
 
 module.exports = router;

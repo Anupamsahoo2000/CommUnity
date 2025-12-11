@@ -1,20 +1,13 @@
 // backend/controllers/bookingController.js
-const sequelize = require("sequelize");
-const { Op } = sequelize;
+const { Op } = require("sequelize");
+const sequelize = require("../config/db");
 const { Booking, Payment, Event, TicketType, User } = require("../models/sql");
 const { ensureSeatsAvailable } = require("../services/seatsService");
 
 /**
- * POST /api/bookings
+ * POST /bookings
  * Body: { eventId, ticketTypeId, quantity }
  * Auth: required
- *
- * Flow:
- *  - check event & ticket type
- *  - ensure seats are available
- *  - create Booking (PENDING) with holdExpiresAt
- *  - create Payment (INITIATED)
- *  - (later) call Cashfree to create order and save providerOrderId
  */
 const createBooking = async (req, res) => {
   const t = await sequelize.transaction();
@@ -30,11 +23,9 @@ const createBooking = async (req, res) => {
     const qty = Number(quantity || 1);
     if (!eventId || !ticketTypeId || !qty || qty <= 0) {
       await t.rollback();
-      return res
-        .status(400)
-        .json({
-          message: "eventId, ticketTypeId and quantity > 0 are required",
-        });
+      return res.status(400).json({
+        message: "eventId, ticketTypeId and quantity > 0 are required",
+      });
     }
 
     // 1) Load event
@@ -74,7 +65,7 @@ const createBooking = async (req, res) => {
     const totalAmount = unitPrice * qty;
 
     // 3) Create Booking (PENDING) with seat hold
-    const HOLD_MINUTES = 15; // adjust as you like
+    const HOLD_MINUTES = 15;
     const holdExpiresAt = new Date(now.getTime() + HOLD_MINUTES * 60 * 1000);
 
     const booking = await Booking.create(
@@ -103,16 +94,6 @@ const createBooking = async (req, res) => {
       { transaction: t }
     );
 
-    // 5) (TODO) Call Cashfree API → create order
-    //
-    // Here you will:
-    //  - use Cashfree SDK or axios to create an order
-    //  - get providerOrderId, payment link, etc.
-    //
-    // For now, we return a mocked paymentLink so you can test frontend.
-    //
-    const mockPaymentLink = `https://example.com/mock-pay?bookingId=${booking.id}`;
-
     await t.commit();
 
     return res.status(201).json({
@@ -132,10 +113,6 @@ const createBooking = async (req, res) => {
         currency: payment.currency,
         providerOrderId: payment.providerOrderId || null,
       },
-      cashfree: {
-        paymentLink: mockPaymentLink,
-        // later: embed Cashfree-specific session/order data
-      },
     });
   } catch (err) {
     console.error("createBooking error:", err);
@@ -148,8 +125,7 @@ const createBooking = async (req, res) => {
 };
 
 /**
- * GET /api/bookings/me
- * Returns current user's bookings with event + ticket info
+ * GET /bookings/me
  */
 const getMyBookings = async (req, res) => {
   try {
@@ -180,7 +156,6 @@ const getMyBookings = async (req, res) => {
       order: [["createdAt", "DESC"]],
     });
 
-    // Shape for frontend (matches your dashboard.js expectations)
     const formatted = bookings.map((b) => ({
       id: b.id,
       status: b.status,
@@ -189,7 +164,6 @@ const getMyBookings = async (req, res) => {
       currency: b.currency,
       qrUrl: b.qrUrl || null,
       createdAt: b.createdAt,
-      // for dashboard card
       ticketType: b.ticketType ? b.ticketType.name : null,
       event: b.event
         ? {
@@ -219,12 +193,7 @@ const getMyBookings = async (req, res) => {
 };
 
 /**
- * POST /api/bookings/:id/cancel
- * Simple cancellation stub (no actual refund yet).
- * Rules:
- *  - user must own the booking (or be ADMIN, we’ll keep it simple: only owner for now)
- *  - booking status must be PENDING or CONFIRMED
- *  - event must be in future
+ * POST /bookings/:id/cancel
  */
 const cancelBooking = async (req, res) => {
   const t = await sequelize.transaction();
@@ -264,8 +233,6 @@ const cancelBooking = async (req, res) => {
         .json({ message: "Event has already started; cannot cancel" });
     }
 
-    // TODO: integrate actual refund via Cashfree if status === CONFIRMED
-    // For now, just mark CANCELLED and free up seats logically
     booking.status = "CANCELLED";
     await booking.save({ transaction: t });
 
@@ -278,8 +245,44 @@ const cancelBooking = async (req, res) => {
   }
 };
 
+/**
+ * POST /bookings/expire-holds
+ * Cron/manual: mark PENDING bookings as EXPIRED if holdExpiresAt < now
+ */
+const expireStaleBookings = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const now = new Date();
+
+    const stale = await Booking.findAll({
+      where: {
+        status: "PENDING",
+        holdExpiresAt: { [Op.lt]: now },
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    for (const b of stale) {
+      b.status = "EXPIRED";
+      await b.save({ transaction: t });
+    }
+
+    await t.commit();
+    return res.json({
+      message: "Expired stale bookings",
+      count: stale.length,
+    });
+  } catch (err) {
+    console.error("expireStaleBookings error:", err);
+    await t.rollback();
+    return res.status(500).json({ message: "Failed to expire bookings" });
+  }
+};
+
 module.exports = {
   createBooking,
   getMyBookings,
   cancelBooking,
+  expireStaleBookings,
 };

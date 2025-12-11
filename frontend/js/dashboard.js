@@ -1,5 +1,3 @@
-// js/dashboard.js
-
 // ---------- Axios defaults ----------
 if (window.axios) {
   axios.defaults.baseURL = "http://localhost:5000";
@@ -11,7 +9,7 @@ function getTokenFromLS() {
   return getToken?.() || localStorage.getItem("community_token");
 }
 
-// ---------- Booking cards renderer (used by loadMyBookings) ----------
+// ---------- Booking cards renderer ----------
 function renderBookingCard(b) {
   // b: { id, event: { id, title, bannerUrl, startTime }, ticketType, quantity, status, qrUrl }
   const wrapper = document.createElement("div");
@@ -25,11 +23,11 @@ function renderBookingCard(b) {
       <div class="flex items-center justify-between gap-3">
         <div>
           <div class="text-sm font-semibold">${b.event?.title || "Event"}</div>
-          <div class="text-xs text-slate-500">${
-            b.ticketType || ""
-          } · ${new Date(
+          <div class="text-xs text-slate-500">
+            ${b.ticketType || ""} · ${new Date(
     b.event?.startTime || Date.now()
-  ).toLocaleString()}</div>
+  ).toLocaleString()}
+          </div>
         </div>
         <div class="text-right text-sm">
           <div class="${
@@ -131,6 +129,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const nameSpan = document.getElementById("dash-user-name");
   const roleSpan = document.getElementById("dash-user-role");
 
+  const createEventSection = document.getElementById("create-event-section");
+  const createSectionToggleBtn = document.getElementById(
+    "create-event-toggle-btn"
+  );
+  const createFormWrap = document.getElementById("create-event-form-wrap");
+  const createForm = document.getElementById("create-event-form");
+  const ticketNameInput = document.getElementById("evt-ticket-name");
+
   function showAlert(type, message) {
     if (!alertBox) return;
     alertBox.classList.remove("hidden");
@@ -165,7 +171,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
       clearAuth?.();
-      // remove axios header
       delete axios.defaults.headers.common["Authorization"];
       window.location.href = "index.html";
     });
@@ -202,11 +207,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       avatar.textContent = initial || "U";
     }
 
+    // 🔐 Role-based UI: show Create Event only for HOST or ADMIN
+    if (createEventSection) {
+      if (user.role === "HOST" || user.role === "ADMIN") {
+        createEventSection.classList.remove("hidden");
+      } else {
+        createEventSection.classList.add("hidden");
+      }
+    }
+
     // Keep LS user in sync
     saveAuth?.(token, user);
 
     // Load bookings after profile is loaded
-    // (only if bookings section exists)
     if (document.getElementById("my-bookings-section")) {
       loadMyBookings();
     }
@@ -214,7 +227,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error(err);
     const status = err?.response?.status;
     if (status === 401) {
-      // Token invalid / expired
       clearAuth?.();
       window.location.href = "auth.html#login";
       return;
@@ -226,13 +238,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ---------------- Create Event handler (with show/hide toggle) ----------------
-  const createSectionToggleBtn = document.getElementById(
-    "create-event-toggle-btn"
-  );
-  const createFormWrap = document.getElementById("create-event-form-wrap");
-  const createForm = document.getElementById("create-event-form");
 
-  // Show form when toggle button clicked
+  // Show form when toggle button clicked (only meaningful if section is visible for HOST/ADMIN)
   if (createSectionToggleBtn && createFormWrap) {
     createSectionToggleBtn.addEventListener("click", () => {
       if (createFormWrap.classList.contains("hidden")) {
@@ -259,7 +266,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Existing create handler (uses same IDs you've already wired)
+  // Create event + optional default ticket type
   if (createForm) {
     const btn = document.getElementById("evt-create-btn");
     const resBox = document.getElementById("evt-create-result");
@@ -268,6 +275,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!btn) return;
       btn.disabled = true;
       btn.textContent = "Creating...";
+
+      if (resBox) {
+        resBox.classList.add("hidden");
+        resBox.textContent = "";
+      }
 
       const title = document.getElementById("evt-title")?.value?.trim();
       const category = document.getElementById("evt-category")?.value;
@@ -282,9 +294,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       // Basic validation
       if (!title || !startTime) {
-        resBox.classList.remove("hidden");
-        resBox.className = "text-sm text-red-600 mt-2";
-        resBox.textContent = "Title and start time are required.";
+        if (resBox) {
+          resBox.classList.remove("hidden");
+          resBox.className = "text-sm text-red-600 mt-2";
+          resBox.textContent = "Title and start time are required.";
+        }
         btn.disabled = false;
         btn.textContent = "Create Event";
         return;
@@ -307,16 +321,46 @@ document.addEventListener("DOMContentLoaded", async () => {
       try {
         const r = await axios.post("/events", payload);
         const created = r?.data?.event || r?.data;
+
         if (created) {
-          resBox.classList.remove("hidden");
-          resBox.className = "text-sm text-emerald-600 mt-2";
-          resBox.textContent = "Event created successfully.";
-          // reset form lightly
+          // 1) Try creating a default ticket type if ticket name is provided
+          const ticketName = ticketNameInput?.value?.trim();
+          const seatsNum = maxSeats ? Number(maxSeats) : null;
+          const priceNum = price ? Number(price) : 0;
+
+          if (ticketName && created.id && seatsNum && seatsNum > 0) {
+            try {
+              await axios.post(`/events/${created.id}/tickets`, {
+                name: ticketName,
+                price: priceNum,
+                quota: seatsNum,
+              });
+            } catch (ticketErr) {
+              console.error("Default ticket create failed:", ticketErr);
+              if (resBox) {
+                resBox.classList.remove("hidden");
+                resBox.className = "text-sm text-amber-600 mt-2";
+                resBox.textContent =
+                  "Event created, but creating the default ticket type failed. You can add tickets later.";
+              }
+            }
+          }
+
+          // 2) Show success message if not already overridden
+          if (
+            resBox &&
+            (resBox.textContent === "" || resBox.classList.contains("hidden"))
+          ) {
+            resBox.classList.remove("hidden");
+            resBox.className = "text-sm text-emerald-600 mt-2";
+            resBox.textContent = "Event created successfully.";
+          }
+
+          // 3) Reset form lightly
           createForm.reset();
-          // hide the form after creating
           if (createFormWrap) createFormWrap.classList.add("hidden");
 
-          // redirect to event page if id present
+          // 4) Redirect to event details
           if (created.id) {
             setTimeout(() => {
               window.location.href = `event.html?id=${created.id}`;
@@ -330,9 +374,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       } catch (err) {
         console.error("Create event failed:", err);
         const msg = err?.response?.data?.message || "Failed to create event.";
-        resBox.classList.remove("hidden");
-        resBox.className = "text-sm text-red-600 mt-2";
-        resBox.textContent = msg;
+        if (resBox) {
+          resBox.classList.remove("hidden");
+          resBox.className = "text-sm text-red-600 mt-2";
+          resBox.textContent = msg;
+        }
       } finally {
         btn.disabled = false;
         btn.textContent = "Create Event";

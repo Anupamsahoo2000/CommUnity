@@ -8,6 +8,14 @@ const {
   getEventSeatsSummary,
 } = require("../services/seatsService");
 
+const {
+  listEventMessages,
+  saveEventMessage,
+} = require("../services/chatService");
+const { getIo } = require("../config/socket");
+const path = require("path");
+const { uploadPublicFile } = require("../utils/s3");
+
 // If your service file is named differently, update the path above.
 
 const geocodeCache = new Map();
@@ -378,38 +386,111 @@ const getEvents = async (req, res) => {
   }
 };
 
-// GET /api/events/:id/tickets
-// Returns ticket types for an event with availability
-const getEventTickets = async (req, res) => {
+// GET /events/:id  (public - single event with tickets + club info)
+const getEventById = async (req, res) => {
   try {
-    const eventId = req.params.id;
+    const id = req.params.id;
 
-    const event = await Event.findByPk(eventId, {
-      attributes: ["id", "title", "status"],
+    const event = await Event.findByPk(id, {
+      include: [
+        {
+          model: TicketType,
+          as: "ticketTypes",
+          attributes: ["id", "name", "price", "quota"], // adjust if more fields
+        },
+        {
+          model: Club,
+          as: "club",
+          attributes: ["id", "name", "slug", "city"],
+        },
+      ],
     });
+
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    if (event.status !== "PUBLISHED") {
-      // you can relax this if you want hosts to see tickets for drafts
-      // but for public endpoint it's safer to require published
-      return res
-        .status(400)
-        .json({ message: "Tickets are only available for published events" });
+    // Optionally calculate a simple seatsLeft from maxSeats
+    // (your event.js already falls back to maxSeats if seatsLeft is missing)
+    const data = event.toJSON();
+    if (data.seatsLeft === undefined && data.maxSeats != null) {
+      data.seatsLeft = data.maxSeats;
     }
 
-    const { tickets, summary } = await getEventTicketsWithAvailability(eventId);
+    return res.json({ event: data });
+  } catch (err) {
+    console.error("getEventById error:", err);
+    return res.status(500).json({ message: "Failed to load event" });
+  }
+};
 
-    return res.json({
-      eventId: event.id,
-      eventTitle: event.title,
-      tickets,
-      summary,
+// GET /events/:id/tickets
+// Public: returns all ticket types for this event
+const getEventTickets = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+
+    const event = await Event.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    const tickets = await TicketType.findAll({
+      where: { eventId },
+      order: [["price", "ASC"]],
+      attributes: ["id", "name", "price", "quota"], // add more columns if you have them
     });
+
+    // 200 with [] is fine; frontend will show "No ticket types available."
+    return res.json({ data: tickets });
   } catch (err) {
     console.error("getEventTickets error:", err);
-    return res.status(500).json({ message: "Failed to load event tickets" });
+    return res.status(500).json({ message: "Failed to load ticket types" });
+  }
+};
+
+// POST /events/:id/tickets
+// Auth: HOST / ADMIN (route will enforce)
+const createTicketType = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const event = await Event.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    const { name, description, price, quota, salesStart, salesEnd } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ message: "Ticket name is required" });
+    }
+    if (quota == null || Number(quota) <= 0) {
+      return res
+        .status(400)
+        .json({ message: "quota (seats) must be a positive number" });
+    }
+
+    const ticket = await TicketType.create({
+      eventId: event.id,
+      name,
+      description: description || null,
+      price: Number(price || 0),
+      quota: Number(quota),
+      salesStart: salesStart || null,
+      salesEnd: salesEnd || null,
+      isActive: true,
+    });
+
+    return res.status(201).json({ ticket });
+  } catch (err) {
+    console.error("createTicketType error:", err);
+    return res.status(500).json({ message: "Failed to create ticket type" });
   }
 };
 
@@ -439,10 +520,148 @@ const getEventSeats = async (req, res) => {
   }
 };
 
+/**
+ * GET /events/:id/chat
+ * Public: returns recent chat messages for this event
+ */
+const getEventChat = async (req, res) => {
+  try {
+    const { id: eventId } = req.params;
+    if (!eventId) {
+      return res.status(400).json({ message: "eventId is required" });
+    }
+
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    const messages = await listEventMessages(eventId, limit);
+
+    // Shape it nicely for frontend
+    const data = messages.map((m) => ({
+      id: m._id,
+      eventId: m.eventId,
+      senderId: m.senderId,
+      senderName: m.senderName,
+      text: m.text,
+      isOrganizer: m.isOrganizer,
+      createdAt: m.createdAt,
+    }));
+
+    return res.json({ data });
+  } catch (err) {
+    console.error("getEventChat error:", err);
+    return res.status(500).json({ message: "Failed to load chat messages" });
+  }
+};
+
+/**
+ * POST /events/:id/chat
+ * Auth required
+ * Body: { text }
+ */
+const postEventChat = async (req, res) => {
+  try {
+    const { id: eventId } = req.params;
+    const user = req.user;
+    const { text } = req.body || {};
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (!eventId) {
+      return res.status(400).json({ message: "eventId is required" });
+    }
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: "text is required" });
+    }
+
+    const isOrganizer = user.role === "HOST" || user.role === "ADMIN"; // simple rule; can be made richer
+
+    const msg = await saveEventMessage({
+      eventId,
+      senderId: user.id,
+      senderName: user.name || user.email || "User",
+      text: text.trim(),
+      isOrganizer,
+    });
+
+    const dto = {
+      id: msg._id,
+      eventId: msg.eventId,
+      senderId: msg.senderId,
+      senderName: msg.senderName,
+      text: msg.text,
+      isOrganizer: msg.isOrganizer,
+      createdAt: msg.createdAt,
+    };
+
+    // 🔴 Broadcast in realtime to everyone in this event room
+    try {
+      const io = getIo();
+      io.to(`event:${eventId}`).emit("chat_message", dto);
+    } catch (sockErr) {
+      console.error("chat_message emit failed:", sockErr);
+    }
+
+    return res.status(201).json({ message: dto });
+  } catch (err) {
+    console.error("postEventChat error:", err);
+    return res.status(500).json({ message: "Failed to send chat message" });
+  }
+};
+
+/**
+ * POST /events/:id/banner
+ * Auth: HOST/ADMIN, must own the event (simplified: any HOST/ADMIN for now)
+ * Form: multipart/form-data with field "banner"
+ */
+const uploadEventBanner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const file = req.file;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (!file) {
+      return res.status(400).json({ message: "banner file is required" });
+    }
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // TODO: stricter check: only organizer or club owner
+    if (user.role !== "HOST" && user.role !== "ADMIN") {
+      return res
+        .status(403)
+        .json({ message: "Only hosts or admins can upload banners" });
+    }
+
+    const ext = path.extname(file.originalname) || ".jpg";
+    const key = `events/${id}/banner${ext}`;
+
+    const bannerUrl = await uploadPublicFile(file.buffer, key, file.mimetype);
+
+    event.bannerUrl = bannerUrl;
+    await event.save();
+
+    return res.json({ bannerUrl });
+  } catch (err) {
+    console.error("uploadEventBanner error:", err);
+    return res.status(500).json({ message: "Failed to upload banner" });
+  }
+};
+
 module.exports = {
   getEvents,
   createEvent,
   updateEvent,
   getEventTickets,
   getEventSeats,
+  getEventById,
+  createTicketType,
+  getEventChat,
+  postEventChat,
+  uploadEventBanner,
 };
