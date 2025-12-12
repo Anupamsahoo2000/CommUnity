@@ -1,6 +1,9 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const User = require("../models/sql/userModel");
+const path = require("path");
+const { uploadPublicFile } = require("../utils/s3");
+const { User } = require("../models/sql");
+
 require("dotenv").config();
 
 const generateToken = (user) => {
@@ -117,8 +120,40 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+/**
+ * POST /auth/me/avatar
+ * Auth: required
+ * Form-data field: avatar (file)
+ */
+const uploadAvatar = async (req, res) => {
+  try {
+    const user = req.user;
+    const file = req.file;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (!file) {
+      return res.status(400).json({ message: "avatar file is required" });
+    }
+
+    const ext = path.extname(file.originalname) || ".jpg";
+    const key = `users/${user.id}/avatar${ext}`;
+
+    const avatarUrl = await uploadPublicFile(file.buffer, key, file.mimetype);
+
+    await User.update({ avatarUrl }, { where: { id: user.id } });
+
+    return res.json({ avatarUrl });
+  } catch (err) {
+    console.error("uploadAvatar error:", err);
+    return res.status(500).json({ message: "Failed to upload avatar" });
+  }
+};
+
 module.exports = {
   signup,
   login,
   getUserProfile,
+  uploadAvatar,
 };

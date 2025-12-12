@@ -34,7 +34,7 @@ router.post("/:id/chat", authenticate(), postEventChat);
 
 // Upload banner image for an event
 router.post(
-  ":/id/banner",
+  "/:id/banner",
   authenticate(["HOST", "ADMIN"]),
   upload.single("banner"),
   uploadEventBanner

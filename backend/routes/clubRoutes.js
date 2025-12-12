@@ -12,11 +12,19 @@ const {
   getClubMembers,
   deleteClub,
   leaveClub,
+  getClubChat,
+  postClubChat,
+  uploadClubBanner,
 } = require("../controllers/clubController");
+const upload = require("../middleware/upload");
 
 // Public listing & details
 router.get("/", listClubs);
 router.get("/:id", getClub);
+
+// Club chat
+router.get("/:id/chat", getClubChat);
+router.post("/:id/chat", authenticate(), postClubChat);
 
 // Protected routes
 // Create: any authenticated user
@@ -30,6 +38,13 @@ router.put("/:id", authenticate(), updateClub);
 router.delete("/:id", authenticate(), deleteClub);
 // Join club (authenticated)
 router.post("/:id/join", authenticate(), joinClub);
+
+router.post(
+  "/:id/banner",
+  authenticate(["HOST", "ADMIN"]),
+  upload.single("banner"),
+  uploadClubBanner
+);
 
 // Members (requires authenticated)
 router.get("/:id/members", authenticate(), getClubMembers);

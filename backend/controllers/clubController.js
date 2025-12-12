@@ -8,6 +8,13 @@ const {
   TicketType,
 } = require("../models/sql/index");
 const { Op, QueryTypes } = require("sequelize");
+const {
+  saveClubMessage,
+  listClubMessages,
+} = require("../services/chatService");
+const { getIo } = require("../config/socket");
+const path = require("path");
+const { uploadPublicFile } = require("../utils/s3");
 
 // Simple slugify helper (same style as events)
 function slugify(text = "") {
@@ -453,12 +460,10 @@ const leaveClub = async (req, res) => {
 
     // Prevent owner from leaving without transfer (owner must delete or transfer)
     if (membership.role === "OWNER") {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Owner cannot leave the club. Transfer ownership or delete the club.",
-        });
+      return res.status(400).json({
+        message:
+          "Owner cannot leave the club. Transfer ownership or delete the club.",
+      });
     }
 
     await ClubMember.destroy({ where: { id: membership.id } });
@@ -586,6 +591,137 @@ const deleteClub = async (req, res) => {
     return res.status(500).json({ message: "Failed to delete club" });
   }
 };
+/**
+ * GET /clubs/:id/chat
+ * Public: returns recent club chat messages
+ */
+const getClubChat = async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    if (!clubId) {
+      return res.status(400).json({ message: "clubId is required" });
+    }
+
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    const messages = await listClubMessages(clubId, limit);
+
+    const data = messages.map((m) => ({
+      id: m._id,
+      clubId: m.clubId,
+      senderId: m.senderId,
+      senderName: m.senderName,
+      text: m.text,
+      isAdminOrOwner: m.isAdminOrOwner,
+      createdAt: m.createdAt,
+    }));
+
+    return res.json({ data });
+  } catch (err) {
+    console.error("getClubChat error:", err);
+    return res.status(500).json({ message: "Failed to load club chat" });
+  }
+};
+
+/**
+ * POST /clubs/:id/chat
+ * Auth required
+ * Body: { text }
+ */
+const postClubChat = async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    const user = req.user;
+    const { text } = req.body || {};
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (!clubId) {
+      return res.status(400).json({ message: "clubId is required" });
+    }
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: "text is required" });
+    }
+
+    const isAdminOrOwner = user.role === "ADMIN" || user.role === "HOST";
+
+    const msg = await saveClubMessage({
+      clubId,
+      senderId: user.id,
+      senderName: user.name || user.email || "User",
+      text: text.trim(),
+      isAdminOrOwner,
+    });
+
+    const dto = {
+      id: msg._id,
+      clubId: msg.clubId,
+      senderId: msg.senderId,
+      senderName: msg.senderName,
+      text: msg.text,
+      isAdminOrOwner: msg.isAdminOrOwner,
+      createdAt: msg.createdAt,
+    };
+
+    // broadcast to club room
+    try {
+      const io = getIo();
+      io.to(`club:${clubId}`).emit("chat_message", dto);
+    } catch (sockErr) {
+      console.error("club chat_message emit failed:", sockErr);
+    }
+
+    return res.status(201).json({ message: dto });
+  } catch (err) {
+    console.error("postClubChat error:", err);
+    return res.status(500).json({ message: "Failed to send club message" });
+  }
+};
+
+/**
+ * POST /clubs/:id/banner
+ * Auth: OWNER/ADMIN/HOST (simplified: HOST/ADMIN)
+ * Form: multipart/form-data with field "banner"
+ */
+const uploadClubBanner = async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    const user = req.user;
+    const file = req.file;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (!file) {
+      return res.status(400).json({ message: "banner file is required" });
+    }
+
+    const club = await Club.findByPk(clubId);
+    if (!club) {
+      return res.status(404).json({ message: "Club not found" });
+    }
+
+    // TODO: refine to check ownerId / club membership role
+    if (user.role !== "HOST" && user.role !== "ADMIN") {
+      return res
+        .status(403)
+        .json({ message: "Only hosts or admins can upload banners" });
+    }
+
+    const ext = path.extname(file.originalname) || ".jpg";
+    const key = `clubs/${clubId}/banner${ext}`;
+
+    const bannerUrl = await uploadPublicFile(file.buffer, key, file.mimetype);
+
+    club.bannerUrl = bannerUrl;
+    await club.save();
+
+    return res.json({ bannerUrl });
+  } catch (err) {
+    console.error("uploadClubBanner error:", err);
+    return res.status(500).json({ message: "Failed to upload club banner" });
+  }
+};
 
 module.exports = {
   createClub,
@@ -596,4 +732,7 @@ module.exports = {
   leaveClub,
   getClubMembers,
   deleteClub,
+  getClubChat,
+  postClubChat,
+  uploadClubBanner,
 };

@@ -113,6 +113,54 @@ async function loadMyBookings() {
   }
 }
 
+function setupAvatarUpload() {
+  const trigger = document.getElementById("avatar-upload-trigger");
+  const input = document.getElementById("avatar-file");
+  const msg = document.getElementById("avatar-upload-msg");
+  const avatar = document.getElementById("dash-user-avatar");
+
+  if (!trigger || !input) return;
+
+  trigger.addEventListener("click", () => input.click());
+
+  input.addEventListener("change", async () => {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const token = getTokenFromLS();
+    if (!token) {
+      window.location.href = "auth.html#login";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("avatar", file);
+
+    msg.textContent = "Uploading...";
+
+    try {
+      const resp = await axios.post("/auth/me/avatar", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      const url = resp?.data?.avatarUrl;
+      msg.textContent = "Photo updated.";
+
+      if (url && avatar) {
+        avatar.style.backgroundImage = `url(${url})`;
+        avatar.style.backgroundSize = "cover";
+        avatar.style.backgroundPosition = "center";
+        avatar.textContent = ""; // hide initial letter
+      }
+    } catch (err) {
+      console.error("Avatar upload failed", err);
+      msg.textContent =
+        err?.response?.data?.message || "Failed to upload photo.";
+    }
+  });
+}
+
 // ---------- Main DOMContentLoaded flow ----------
 document.addEventListener("DOMContentLoaded", async () => {
   const alertBox = document.getElementById("dash-alert");
@@ -218,6 +266,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Keep LS user in sync
     saveAuth?.(token, user);
+
+    setupAvatarUpload();
 
     // Load bookings after profile is loaded
     if (document.getElementById("my-bookings-section")) {

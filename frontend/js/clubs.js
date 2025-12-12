@@ -29,7 +29,36 @@ function getParam(name) {
   return p.get(name);
 }
 
-// render helpers
+// Debounce util
+function debounce(fn, wait) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
+// POST helper for AI endpoints
+async function fetchAiPredictive(text) {
+  try {
+    const r = await axios.post("/ai/predictive", { text });
+    return r?.data?.suggestions || [];
+  } catch (e) {
+    console.warn("AI predictive failed", e);
+    return [];
+  }
+}
+async function fetchAiSmartReplies(message) {
+  try {
+    const r = await axios.post("/ai/smart-replies", { message });
+    return r?.data?.replies || [];
+  } catch (e) {
+    console.warn("AI smart replies failed", e);
+    return [];
+  }
+}
+
+// -------- render helpers (unchanged) ----------
 function renderMemberRow(m) {
   const div = document.createElement("div");
   div.className = "flex items-center gap-3 p-2 bg-white rounded-lg border";
@@ -64,6 +93,62 @@ function renderEventCard(e) {
   return div;
 }
 
+// --------- Club banner upload ----------
+function setupClubBannerUpload(clubId, canManage) {
+  const wrap = q("club-banner-upload-wrap");
+  const input = q("club-banner-input");
+  const btn = q("club-banner-upload-btn");
+  const msg = q("club-banner-upload-msg");
+
+  if (!wrap || !input || !btn) return;
+  if (!canManage) return;
+
+  wrap.classList.remove("hidden");
+
+  btn.addEventListener("click", async () => {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const token = localStorage.getItem("community_token");
+    if (!token) {
+      window.location.href = "auth.html#login";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("banner", file);
+
+    btn.disabled = true;
+    msg.textContent = "Uploading...";
+
+    try {
+      const resp = await axios.post(`/clubs/${clubId}/banner`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      const url = resp?.data?.bannerUrl;
+      msg.textContent = "Banner updated.";
+
+      if (url) {
+        const banner = q("club-banner");
+        banner.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = url;
+        img.className = "w-full h-full object-cover";
+        banner.appendChild(img);
+      }
+    } catch (err) {
+      console.error("Club banner upload failed", err);
+      msg.textContent =
+        err?.response?.data?.message || "Failed to upload banner.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+// ---------- Load / populate ----------
 async function loadClub() {
   const id = getParam("id");
   if (!id) {
@@ -116,9 +201,14 @@ async function loadClub() {
 
     // join state
     const isMember = club.isMember === true;
-    q("club-join-btn").classList.toggle("hidden", isMember);
-    q("club-leave-btn").classList.toggle("hidden", !isMember);
-    if (club.canManage) q("club-manage-link").classList.remove("hidden");
+    if (q("club-join-btn"))
+      q("club-join-btn").classList.toggle("hidden", isMember);
+    if (q("club-leave-btn"))
+      q("club-leave-btn").classList.toggle("hidden", !isMember);
+    if (club.canManage && q("club-manage-link"))
+      q("club-manage-link").classList.remove("hidden");
+
+    setupClubBannerUpload(club.id, club.canManage === true);
 
     // events
     const eventsList = q("club-events-list");
@@ -208,46 +298,237 @@ function setupTabs() {
   });
 }
 
-// Chat (very simple — posts to /api/clubs/:id/chat)
-function setupChat() {
+// -------- club chat ----------
+let clubSocket = null;
+
+async function loadClubChatHistory(clubId) {
+  const box = q("club-chat-messages");
+  if (!box) return;
+  box.innerHTML = "";
+
+  try {
+    const resp = await axios.get(`/clubs/${clubId}/chat?limit=50`);
+    const msgs = resp?.data?.data || [];
+    msgs.forEach((msg) => appendClubChatMessage(msg));
+    box.scrollTop = box.scrollHeight;
+  } catch (err) {
+    console.warn("Failed to load club chat history", err);
+  }
+}
+
+function appendClubChatMessage(msg) {
+  const box = q("club-chat-messages");
+  if (!box) return;
+  const el = document.createElement("div");
+  el.className = "mb-2 text-sm relative";
+  el.innerHTML = `
+    <div class="text-xs text-slate-500">
+      ${msg.senderName || "User"} · ${new Date(
+    msg.createdAt || Date.now()
+  ).toLocaleTimeString()}
+    </div>
+    <div ${
+      msg.isAdminOrOwner
+        ? 'class="font-medium text-primary-700"'
+        : 'class="text-slate-800"'
+    }>
+      ${msg.text}
+    </div>
+  `;
+  box.appendChild(el);
+
+  // add smart reply button for messages not sent by current user
+  const me = JSON.parse(localStorage.getItem("community_user") || "{}");
+  if (
+    (msg.senderId && String(msg.senderId) !== String(me.id)) ||
+    !msg.senderId
+  ) {
+    addSmartReplyButtonToMessage(el, msg.text);
+  }
+
+  box.scrollTop = box.scrollHeight;
+}
+
+function setupClubChat(clubId) {
   const send = q("club-chat-send");
   const input = q("club-chat-input");
   const box = q("club-chat-messages");
+  const typingEl = q("club-chat-typing");
+
+  // socket connection
+  try {
+    clubSocket = io(axios.defaults.baseURL || "/", {
+      transports: ["websocket"],
+    });
+    clubSocket.on("connect", () => {
+      clubSocket.emit("join_club_room", { clubId });
+    });
+    clubSocket.on("chat_message", (msg) => {
+      if (msg.clubId === clubId) appendClubChatMessage(msg);
+    });
+    clubSocket.on("typing", ({ user }) => {
+      if (!typingEl) return;
+      typingEl.classList.remove("hidden");
+      typingEl.textContent = `${user} is typing...`;
+      setTimeout(() => typingEl.classList.add("hidden"), 1200);
+    });
+  } catch (err) {
+    console.warn("Club socket connect failed", err);
+  }
+
   send?.addEventListener("click", async () => {
     const text = input.value.trim();
     if (!text) return;
-    const id = getParam("id");
+    const token = localStorage.getItem("community_token");
+    if (!token) {
+      window.location.href = "auth.html#login";
+      return;
+    }
+
+    // optimistic message
+    const me = JSON.parse(localStorage.getItem("community_user") || "{}");
+    appendClubChatMessage({
+      senderName: me.name || me.email || "You",
+      text,
+      createdAt: Date.now(),
+      isAdminOrOwner: me.role === "HOST" || me.role === "ADMIN",
+      clubId,
+      senderId: me.id,
+    });
+    box.scrollTop = box.scrollHeight;
+    input.value = "";
+
     try {
-      // optimistic
-      const me = JSON.parse(localStorage.getItem("community_user") || "{}");
-      const msg = {
-        senderName: me.name || me.email || "You",
-        text,
-        createdAt: Date.now(),
-      };
-      const el = document.createElement("div");
-      el.className = "mb-2 text-sm";
-      el.innerHTML = `<div class="text-xs text-slate-500">${msg.senderName}</div><div>${msg.text}</div>`;
-      box.appendChild(el);
-      box.scrollTop = box.scrollHeight;
-      input.value = "";
       await axios.post(
-        `/clubs/${id}/chat`,
+        `/clubs/${clubId}/chat`,
         { text },
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
     } catch (err) {
-      alert("Failed to send chat");
+      alert("Failed to send chat message");
+      console.error(err);
     }
+  });
+
+  // typing indicator emit
+  input?.addEventListener("input", () => {
+    if (clubSocket && clubSocket.connected) {
+      clubSocket.emit("typing", {
+        clubId,
+        user:
+          JSON.parse(localStorage.getItem("community_user") || "{}").name ||
+          "Someone",
+      });
+    }
+  });
+
+  // attach predictive typing on this input
+  attachPredictiveTypingToChatClub();
+}
+
+// ---------- AI predictive typing + smart replies (club) ----------
+
+function showPredictiveSuggestionsClub(items) {
+  const container = q("club-chat-ai-suggestions");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!items || !items.length) {
+    container.classList.add("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+
+  items.forEach((it) => {
+    const btn = document.createElement("button");
+    btn.className = "px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200";
+    btn.textContent = it;
+    btn.addEventListener("click", () => {
+      const input = q("club-chat-input");
+      if (!input) return;
+      input.value = input.value ? input.value + " " + it : it;
+      input.focus();
+      container.classList.add("hidden");
+    });
+    container.appendChild(btn);
   });
 }
 
-// init
+const predictiveDebouncedClub = debounce(async (text) => {
+  if (!text || text.trim().length < 2) {
+    showPredictiveSuggestionsClub([]);
+    return;
+  }
+  const suggestions = await fetchAiPredictive(text.trim());
+  showPredictiveSuggestionsClub(suggestions.slice(0, 5));
+}, 350);
+
+function attachPredictiveTypingToChatClub() {
+  const input = q("club-chat-input");
+  if (!input) return;
+  input.addEventListener("input", (ev) => {
+    predictiveDebouncedClub(ev.target.value);
+  });
+}
+
+// Smart replies button
+function addSmartReplyButtonToMessage(domMessageEl, msgText) {
+  const srBtn = document.createElement("button");
+  srBtn.className = "ml-2 text-xs text-primary-600 hover:underline";
+  srBtn.textContent = "Suggest replies";
+  srBtn.addEventListener("click", async () => {
+    srBtn.disabled = true;
+    const replies = await fetchAiSmartReplies(msgText);
+    srBtn.disabled = false;
+    if (!replies || !replies.length) {
+      alert("No suggestions");
+      return;
+    }
+    const popup = document.createElement("div");
+    popup.className = "mt-1 p-2 bg-white border rounded shadow-sm";
+    popup.style.position = "absolute";
+    replies.slice(0, 3).forEach((rep) => {
+      const rBtn = document.createElement("button");
+      rBtn.className =
+        "block w-full text-left px-2 py-1 text-xs hover:bg-slate-50";
+      rBtn.textContent = rep;
+      rBtn.addEventListener("click", () => {
+        q("club-chat-input").value = rep;
+        // optionally auto-send:
+        // q("club-chat-send").click();
+        if (popup.parentElement) popup.parentElement.removeChild(popup);
+      });
+      popup.appendChild(rBtn);
+    });
+    const rect = domMessageEl.getBoundingClientRect();
+    popup.style.left = `${Math.max(8, rect.left)}px`;
+    popup.style.top = `${rect.bottom + 6 + window.scrollY}px`;
+    document.body.appendChild(popup);
+
+    function onDoc(e) {
+      if (!popup.contains(e.target)) {
+        if (popup.parentElement) popup.parentElement.removeChild(popup);
+        document.removeEventListener("click", onDoc);
+      }
+    }
+    setTimeout(() => document.addEventListener("click", onDoc), 20);
+  });
+
+  domMessageEl.appendChild(srBtn);
+}
+
+// ---------- Init ----------
 document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
-  setupChat();
+  // club chat wiring
+  const clubId = getParam("id");
+  if (clubId) {
+    setupClubChat(clubId);
+    loadClubChatHistory(clubId);
+  }
+
   // wire join/leave
   q("club-join-btn")?.addEventListener("click", joinClub);
   q("club-leave-btn")?.addEventListener("click", leaveClub);
+
   loadClub();
 });

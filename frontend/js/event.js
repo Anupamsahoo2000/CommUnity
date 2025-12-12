@@ -36,7 +36,36 @@ function getParam(name) {
   return p.get(name);
 }
 
-// simple platform fee calc (example: 5% + ₹10)
+// Debounce util
+function debounce(fn, wait) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
+// POST helper for AI endpoints
+async function fetchAiPredictive(text) {
+  try {
+    const r = await axios.post("/ai/predictive", { text });
+    return r?.data?.suggestions || [];
+  } catch (e) {
+    console.warn("AI predictive failed", e);
+    return [];
+  }
+}
+async function fetchAiSmartReplies(message) {
+  try {
+    const r = await axios.post("/ai/smart-replies", { message });
+    return r?.data?.replies || [];
+  } catch (e) {
+    console.warn("AI smart replies failed", e);
+    return [];
+  }
+}
+
+// simple platform fee calc
 function calcPlatformFee(base, qty) {
   const percent = 0.02;
   const flat = 0;
@@ -49,7 +78,7 @@ let SELECTED_QTY = 1;
 let socket = null;
 let seatPollInterval = null;
 
-// ---------- Ticket types UI ----------
+// ---------- Ticket types UI (unchanged) ----------
 function renderTicketTypes(ticketTypes) {
   const container = qsel("ticket-types");
   container.innerHTML = "";
@@ -65,7 +94,6 @@ function renderTicketTypes(ticketTypes) {
   }
 
   ticketTypes.forEach((t, idx) => {
-    // t: { id, name, price, quota, remaining / availableSeats }
     const remaining =
       t.remaining !== undefined ? t.remaining : t.availableSeats;
     const div = document.createElement("div");
@@ -118,12 +146,9 @@ function renderTicketTypes(ticketTypes) {
       const id = ev.target.value;
       SELECTED_TICKET = ticketTypes.find((t) => String(t.id) === String(id));
       SELECTED_QTY = 1;
-
-      // reset all qty inputs to 1
-      container.querySelectorAll(".qty-input").forEach((inp) => {
-        inp.value = "1";
-      });
-
+      container
+        .querySelectorAll(".qty-input")
+        .forEach((inp) => (inp.value = "1"));
       updatePriceBreakdown(ticketTypes);
     });
   });
@@ -133,8 +158,7 @@ function renderTicketTypes(ticketTypes) {
       const id = btn.dataset.for;
       const input = container.querySelector(`.qty-input[data-for="${id}"]`);
       if (!input) return;
-      let v = Number(input.value || 1);
-      v = v + 1;
+      let v = Number(input.value || 1) + 1;
       input.value = v;
       SELECTED_QTY = v;
       updatePriceBreakdown(ticketTypes);
@@ -185,7 +209,6 @@ function updatePriceBreakdown(ticketTypes) {
   const base = Number(SELECTED_TICKET.price || 0);
   const qty = Number(SELECTED_QTY || 1);
 
-  // simple cap: if we know remaining seats, do not allow more than remaining
   const remaining =
     SELECTED_TICKET.remaining !== undefined
       ? SELECTED_TICKET.remaining
@@ -212,6 +235,59 @@ function updatePriceBreakdown(ticketTypes) {
       : "Free ticket";
 }
 
+function setupEventBannerUpload(eventId) {
+  const wrap = qsel("event-banner-upload-wrap");
+  const input = qsel("event-banner-input");
+  const btn = qsel("event-banner-upload-btn");
+  const msg = qsel("event-banner-upload-msg");
+
+  const me = JSON.parse(localStorage.getItem("community_user") || "{}");
+  const canUpload = me.role === "HOST" || me.role === "ADMIN";
+
+  if (!wrap || !btn || !input) return;
+  if (!canUpload) return;
+
+  wrap.classList.remove("hidden");
+
+  btn.addEventListener("click", async () => {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+
+    const formData = new FormData();
+    formData.append("banner", file);
+
+    btn.disabled = true;
+    msg.textContent = "Uploading...";
+
+    try {
+      const token = localStorage.getItem("community_token");
+      const resp = await axios.post(`/events/${eventId}/banner`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      const url = resp?.data?.bannerUrl;
+      msg.textContent = "Banner updated.";
+
+      if (url) {
+        const banner = qsel("event-banner");
+        banner.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = url;
+        img.className = "w-full h-full object-cover";
+        banner.appendChild(img);
+      }
+    } catch (err) {
+      console.error("Banner upload failed", err);
+      msg.textContent =
+        err?.response?.data?.message || "Failed to upload banner.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 // ---------- Event + tickets loading ----------
 async function loadEvent() {
   const id = getParam("id");
@@ -222,14 +298,12 @@ async function loadEvent() {
   hideError();
 
   try {
-    // NOTE: using /api/events/:id
     const res = await axios.get(`/events/${id}`);
     const event = res?.data?.event || res?.data;
     if (!event) throw new Error("Event not found");
 
     CURRENT_EVENT = event;
 
-    // populate UI
     qsel("event-title").textContent = event.title || "Untitled";
 
     // meta: date/time + city + category
@@ -267,13 +341,11 @@ async function loadEvent() {
       event.rules || "Standard cancellation policy applies."
     ).replace(/\n/g, "<br/>");
 
-    // tags
     qsel("event-tags").textContent =
       event.tags && Array.isArray(event.tags)
         ? event.tags.join(" · ")
         : event.category || "";
 
-    // banner
     const banner = qsel("event-banner");
     banner.innerHTML = "";
     if (event.bannerUrl) {
@@ -287,15 +359,12 @@ async function loadEvent() {
         '<div class="w-full h-full flex items-center justify-center text-slate-400">No image</div>';
     }
 
-    // initial seats left
     updateSeatsDisplay(event.seatsLeft ?? event.maxSeats ?? "—");
 
-    // ticket types: prefer dedicated endpoint
     let ticketTypes = [];
     try {
       const tResp = await axios.get(`/events/${id}/tickets`);
       const data = tResp?.data || {};
-      // backend may return { tickets: [...] } or an array directly
       ticketTypes = data.tickets || data.data || data || [];
       if (!Array.isArray(ticketTypes)) ticketTypes = [];
     } catch (err) {
@@ -310,7 +379,6 @@ async function loadEvent() {
       ) {
         ticketTypes = event.ticketTypes;
       } else {
-        // final fallback: default ticket
         ticketTypes = [
           {
             id: "default",
@@ -325,13 +393,14 @@ async function loadEvent() {
 
     renderTicketTypes(ticketTypes);
 
-    // show card / hide loader
     qsel("event-card").classList.remove("hidden");
     qsel("event-loading").classList.add("hidden");
 
-    // start seats live updates + chat setup
+    // start seats live updates + chat setup + banner upload wiring
     startSeatsLive(id);
     setupChat(id);
+    setupEventBannerUpload(id);
+    // attach predictive typing for chat (setupChat will call this)
   } catch (err) {
     console.error(err);
     showError(
@@ -349,7 +418,6 @@ function updateSeatsDisplay(v) {
 
 // ---------- Seats polling + socket.io ----------
 function startSeatsLive(eventId) {
-  // poll every 10s
   if (seatPollInterval) clearInterval(seatPollInterval);
   seatPollInterval = setInterval(async () => {
     try {
@@ -357,11 +425,10 @@ function startSeatsLive(eventId) {
       const seatsLeft = r?.data?.seatsLeft ?? r?.data?.remaining ?? null;
       if (seatsLeft !== undefined) updateSeatsDisplay(seatsLeft);
     } catch (e) {
-      // ignore errors in polling
+      // ignore
     }
   }, 10000);
 
-  // socket.io realtime (if backend supports it)
   try {
     socket = io(axios.defaults.baseURL || "/", { transports: ["websocket"] });
     socket.on("connect", () => {
@@ -372,10 +439,9 @@ function startSeatsLive(eventId) {
         updateSeatsDisplay(payload.seatsLeft);
       }
     });
-
-    // chat messages
     socket.on("chat_message", (msg) => {
-      appendChatMessage(msg);
+      // use smart-enabled append
+      appendChatMessageWithSmart(msg);
     });
     socket.on("typing", ({ user }) => {
       const el = qsel("chat-typing");
@@ -389,7 +455,7 @@ function startSeatsLive(eventId) {
   }
 }
 
-// ---------- Booking flow ----------
+// ---------- Booking flow (unchanged) ----------
 async function bookNow() {
   if (!CURRENT_EVENT) {
     alert("Event not loaded");
@@ -427,7 +493,6 @@ async function bookNow() {
   }
 
   try {
-    // 1) Create booking
     const bookingResp = await axios.post("/bookings", payload, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -442,7 +507,6 @@ async function bookNow() {
       resultBox.textContent = "Booking created. Creating payment order...";
     }
 
-    // 2) Create Cashfree order for this booking
     const payResp = await axios.post(
       "/payments/create-order",
       { bookingId: booking.id },
@@ -458,11 +522,8 @@ async function bookNow() {
       resultBox.classList.remove("hidden");
       resultBox.className = "mt-3 text-sm text-emerald-600";
       resultBox.textContent =
-        "Payment order created. In development, you can mark it success via webhook or check API. Your booking will appear in My Bookings.";
+        "Payment order created. Complete payment to confirm booking.";
     }
-
-    // Optionally, you can redirect to dashboard:
-    // setTimeout(() => (window.location.href = "dashboard.html"), 1200);
   } catch (err) {
     console.error("Booking/payment failed", err);
     const msg =
@@ -481,7 +542,8 @@ async function bookNow() {
   }
 }
 
-// ---------- Chat helpers ----------
+// ---------- Chat helpers & AI ----------
+
 function appendChatMessage(msg) {
   const box = qsel("chat-messages");
   if (!box) return;
@@ -503,6 +565,120 @@ function appendChatMessage(msg) {
   box.scrollTop = box.scrollHeight;
 }
 
+function addSmartReplyButtonToMessageEvent(domMessageEl, msgText) {
+  const srBtn = document.createElement("button");
+  srBtn.className = "ml-2 text-xs text-primary-600 hover:underline";
+  srBtn.textContent = "Suggest replies";
+  srBtn.addEventListener("click", async () => {
+    srBtn.disabled = true;
+    const replies = await fetchAiSmartReplies(msgText);
+    srBtn.disabled = false;
+    if (!replies || !replies.length) {
+      alert("No suggestions");
+      return;
+    }
+    const popup = document.createElement("div");
+    popup.className = "mt-1 p-2 bg-white border rounded shadow-sm";
+    popup.style.position = "absolute";
+    replies.slice(0, 3).forEach((rep) => {
+      const rBtn = document.createElement("button");
+      rBtn.className =
+        "block w-full text-left px-2 py-1 text-xs hover:bg-slate-50";
+      rBtn.textContent = rep;
+      rBtn.addEventListener("click", () => {
+        qsel("chat-input").value = rep;
+        if (popup.parentElement) popup.parentElement.removeChild(popup);
+      });
+      popup.appendChild(rBtn);
+    });
+    const rect = domMessageEl.getBoundingClientRect();
+    popup.style.left = `${Math.max(8, rect.left)}px`;
+    popup.style.top = `${rect.bottom + 6 + window.scrollY}px`;
+    document.body.appendChild(popup);
+
+    function onDoc(e) {
+      if (!popup.contains(e.target)) {
+        if (popup.parentElement) popup.parentElement.removeChild(popup);
+        document.removeEventListener("click", onDoc);
+      }
+    }
+    setTimeout(() => document.addEventListener("click", onDoc), 20);
+  });
+  domMessageEl.appendChild(srBtn);
+}
+
+function appendChatMessageWithSmart(msg) {
+  const box = qsel("chat-messages");
+  if (!box) return;
+  const el = document.createElement("div");
+  el.className = `mb-2 ${
+    msg.isOrganizer
+      ? "text-sm font-medium text-primary-700"
+      : "text-sm text-slate-700"
+  }`;
+  el.innerHTML = `<div class="text-xs text-slate-500">${
+    msg.senderName || "User"
+  } · ${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
+                  <div class="chat-text">${msg.text}</div>`;
+  box.appendChild(el);
+
+  // add smart reply button for messages not from current user
+  const me = JSON.parse(localStorage.getItem("community_user") || "{}");
+  if (
+    (msg.senderId && String(msg.senderId) !== String(me.id)) ||
+    !msg.senderId
+  ) {
+    addSmartReplyButtonToMessageEvent(el, msg.text);
+  }
+
+  box.scrollTop = box.scrollHeight;
+}
+
+// ---------- AI predictive typing UI for event chat ----------
+
+function showPredictiveSuggestions(items) {
+  const container = qsel("chat-ai-suggestions");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!items || !items.length) {
+    container.classList.add("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+
+  items.forEach((it) => {
+    const btn = document.createElement("button");
+    btn.className = "px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200";
+    btn.textContent = it;
+    btn.addEventListener("click", () => {
+      const input = qsel("chat-input");
+      if (!input) return;
+      input.value = input.value ? input.value + " " + it : it;
+      input.focus();
+      container.classList.add("hidden");
+    });
+    container.appendChild(btn);
+  });
+}
+
+const predictiveDebounced = debounce(async (text) => {
+  if (!text || text.trim().length < 2) {
+    showPredictiveSuggestions([]);
+    return;
+  }
+  const suggestions = await fetchAiPredictive(text.trim());
+  showPredictiveSuggestions(suggestions.slice(0, 5));
+}, 350);
+
+function attachPredictiveTypingToChat() {
+  const input = qsel("chat-input");
+  if (!input) return;
+  input.addEventListener("input", (ev) => {
+    predictiveDebounced(ev.target.value);
+  });
+}
+
+// ensure setupChat attaches it
 function setupChat(eventId) {
   const openBtn = qsel("open-chat-btn");
   const chatWidget = qsel("chat-widget");
@@ -511,7 +687,6 @@ function setupChat(eventId) {
   const input = qsel("chat-input");
 
   if (!openBtn || !chatWidget) return;
-
   openBtn.addEventListener("click", () =>
     chatWidget.classList.toggle("hidden")
   );
@@ -538,12 +713,19 @@ function setupChat(eventId) {
     }
   });
 
-  // typing indicator
+  // typing indicator emit
   input?.addEventListener("input", () => {
-    if (socket && socket.connected) {
-      socket.emit("typing", { eventId });
-    }
+    if (socket && socket.connected)
+      socket.emit("typing", {
+        eventId,
+        user:
+          JSON.parse(localStorage.getItem("community_user") || "{}").name ||
+          "Someone",
+      });
   });
+
+  // attach predictive typing
+  attachPredictiveTypingToChat();
 }
 
 // ---------- Init ----------

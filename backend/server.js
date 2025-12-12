@@ -18,6 +18,8 @@ const clubRoutes = require("./routes/clubRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const aiRoutes = require("./routes/aiRoutes");
+const hostRoutes = require("./routes/hostRoutes");
 
 // Use routes
 app.use("/auth", authRoutes);
@@ -25,6 +27,10 @@ app.use("/clubs", clubRoutes);
 app.use("/events", eventRoutes);
 app.use("/bookings", bookingRoutes);
 app.use("/payments", paymentRoutes);
+app.use("/ai", aiRoutes);
+app.use("/hosts", hostRoutes);
+
+//Sequleize
 (async () => {
   try {
     await sequelize.authenticate();

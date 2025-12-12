@@ -49,6 +49,34 @@ function initSocket(server) {
       });
     });
 
+    socket.on("join_club_room", ({ clubId }) => {
+      if (!clubId) return;
+      const room = `club:${clubId}`;
+      socket.join(room);
+      console.log(`Socket ${socket.id} joined room ${room}`);
+    });
+
+    socket.on("leave_club_room", ({ clubId }) => {
+      if (!clubId) return;
+      const room = `club:${clubId}`;
+      socket.leave(room);
+      console.log(`Socket ${socket.id} left room ${room}`);
+    });
+    socket.on("club_message", (payload) => {
+      // payload: { clubId, text, userId, name }
+      if (!payload?.clubId || !payload?.text) return;
+      const room = `club:${payload.clubId}`;
+
+      // TODO (Phase 4):
+      //  - Save to Mongo ClubChatMessage
+      //  - Attach timestamp, etc.
+
+      io.to(room).emit("club_message", {
+        ...payload,
+        createdAt: new Date().toISOString(),
+      });
+    });
+
     socket.on("disconnect", () => {
       console.log("❌ Socket disconnected:", socket.id);
     });

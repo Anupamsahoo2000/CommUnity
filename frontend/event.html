@@ -77,6 +77,30 @@
                 <p id="event-meta" class="text-sm text-slate-500 mt-2"></p>
               </div>
 
+              <div id="event-banner-upload-wrap" class="hidden px-6 mt-4">
+                <label class="block text-xs text-slate-500 mb-1">
+                  Update event banner (Hosts only)
+                </label>
+                <div class="flex items-center gap-2">
+                  <input
+                    id="event-banner-input"
+                    type="file"
+                    accept="image/*"
+                    class="text-xs"
+                  />
+                  <button
+                    id="event-banner-upload-btn"
+                    class="px-3 py-1.5 rounded-full bg-primary-600 text-white text-xs"
+                  >
+                    Upload
+                  </button>
+                </div>
+                <div
+                  id="event-banner-upload-msg"
+                  class="mt-1 text-xs text-slate-500"
+                ></div>
+              </div>
+
               <div class="text-right">
                 <div class="text-xs text-slate-500 mb-1">Seats left</div>
                 <div
@@ -179,6 +203,10 @@
                 >
                   Send
                 </button>
+                <div
+                  id="chat-ai-suggestions"
+                  class="mt-2 flex gap-2 hidden"
+                ></div>
               </div>
               <div id="chat-typing" class="text-xs text-slate-500 mt-2 hidden">
                 Someone is typing...
