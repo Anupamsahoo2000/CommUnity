@@ -1,4 +1,5 @@
-// js/host-dashboard.js
+// frontend/js/host-dashboard.js
+// ---------- Axios base config ----------
 if (window.axios) {
   axios.defaults.baseURL = "http://localhost:5000";
   axios.defaults.headers["Content-Type"] = "application/json";

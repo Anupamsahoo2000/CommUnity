@@ -1,3 +1,4 @@
+<!-- frontend/event.html -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -56,6 +57,19 @@
     <main
       class="max-w-7xl mx-auto mt-6 px-4 grid grid-cols-1 lg:grid-cols-3 gap-6"
     >
+      <!-- EVENTS LIST VIEW -->
+      <section id="events-list-view" class="hidden">
+        <div
+          id="events-grid"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        ></div>
+      </section>
+
+      <!-- EVENT DETAILS VIEW -->
+      <section id="event-detail-view" class="hidden">
+        <!-- your existing event detail HTML -->
+      </section>
+
       <!-- LEFT: banner + meta + description -->
       <section class="lg:col-span-2">
         <div id="event-loading" class="text-center py-12">Loading event...</div>
@@ -139,7 +153,7 @@
       </section>
 
       <!-- RIGHT: ticket panel -->
-      <aside class="lg:col-span-1">
+      <aside id="event-booking-section" class="lg:col-span-1">
         <div class="sticky top-24">
           <div class="bg-white rounded-2xl p-4 card-shadow">
             <div class="mb-3">
@@ -162,7 +176,6 @@
                 <span>Total</span><span id="break-total">—</span>
               </div>
             </div>
-
             <div class="mt-4">
               <button
                 id="book-now-btn"
@@ -171,7 +184,6 @@
                 Book Now
               </button>
             </div>
-
             <div id="booking-result" class="mt-3 text-sm hidden"></div>
           </div>
 

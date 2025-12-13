@@ -1,4 +1,4 @@
-// js/auth.js
+// frontend/js/auth.js
 document.addEventListener("DOMContentLoaded", () => {
   const tabLogin = document.getElementById("tab-login");
   const tabRegister = document.getElementById("tab-register");
@@ -85,6 +85,18 @@ document.addEventListener("DOMContentLoaded", () => {
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     }
   }
+  function redirectByRole(user) {
+    if (!user || !user.role) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    if (user.role === "HOST") {
+      window.location.href = "host-dashboard.html";
+    } else {
+      window.location.href = "index.html";
+    }
+  }
 
   // Login submit
   if (loginForm) {
@@ -122,7 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
           showAlert("success", "Login successful! Redirecting...");
 
           setTimeout(() => {
-            window.location.href = "index.html";
+            redirectByRole(user);
           }, 600);
         }
       } catch (err) {
@@ -190,8 +202,8 @@ document.addEventListener("DOMContentLoaded", () => {
           setAuthAndAttach(token, user);
           showAlert("success", "Account created! Redirecting to dashboard...");
           setTimeout(() => {
-            window.location.href = "index.html";
-          }, 700);
+            redirectByRole(user);
+          }, 600);
         }
       } catch (err) {
         console.error(err);

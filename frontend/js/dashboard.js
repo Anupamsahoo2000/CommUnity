@@ -1,3 +1,5 @@
+// frontend/js/dashboard.js
+
 // ---------- Axios defaults ----------
 if (window.axios) {
   axios.defaults.baseURL = "http://localhost:5000";
@@ -318,9 +320,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Create event + optional default ticket type
   if (createForm) {
+    
     const btn = document.getElementById("evt-create-btn");
     const resBox = document.getElementById("evt-create-result");
-
     btn.addEventListener("click", async () => {
       if (!btn) return;
       btn.disabled = true;

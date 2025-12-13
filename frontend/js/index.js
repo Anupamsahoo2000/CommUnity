@@ -1,4 +1,4 @@
-// js/index.js
+// frontend/js/index.js
 
 // ---------- Axios base config ----------
 if (window.axios) {
@@ -297,7 +297,12 @@ async function loadEventsFromApi() {
       params.date_to = filtersState.date;
     }
 
-    const res = await axios.get("/events", { params });
+    const res = await axios.get("/events", {
+      params: {
+        limit: 6, // 👈 only 3–6 events
+        sort: "featured", // optional
+      },
+    });
     const payload = res.data || {};
     let events = payload.data || payload.events || [];
 

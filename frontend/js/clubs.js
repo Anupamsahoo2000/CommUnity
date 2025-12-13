@@ -1,4 +1,4 @@
-// js/club.js
+// frontend/js/clubs.js
 if (window.axios) {
   axios.defaults.baseURL = "http://localhost:5000";
   axios.defaults.headers["Content-Type"] = "application/json";
