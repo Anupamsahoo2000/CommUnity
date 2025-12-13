@@ -1,4 +1,4 @@
-// backend/src/models/sql/bookingModel.js
+// backend/models/sql/bookingModel.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../../config/db");
 

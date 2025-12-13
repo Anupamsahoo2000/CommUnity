@@ -1,4 +1,4 @@
-// backend/src/models/sql/eventModel.js
+// backend/models/sql/eventModel.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../../config/db");
 

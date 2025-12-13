@@ -1,3 +1,4 @@
+// backend/models/mongo/clubChatMessage.js
 const mongoose = require("mongoose");
 
 const eventChatMessageSchema = new mongoose.Schema(

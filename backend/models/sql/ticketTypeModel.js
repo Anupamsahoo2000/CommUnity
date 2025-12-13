@@ -1,4 +1,4 @@
-// backend/src/models/sql/ticketTypeModel.js
+// backend/models/sql/ticketTypeModel.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../../config/db");
 

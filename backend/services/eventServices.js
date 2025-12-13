@@ -1,5 +1,11 @@
-// backend/src/services/event.service.js
-const { sequelize, Event, Club, TicketType, User } = require("../models/sql/index");
+// backend/services/event.service.js
+const {
+  sequelize,
+  Event,
+  Club,
+  TicketType,
+  User,
+} = require("../models/sql/index");
 const { Op, QueryTypes } = require("sequelize");
 
 /**
@@ -168,8 +174,13 @@ async function listEvents({
     const tickets = eventIds.length
       ? await TicketType.findAll({ where: { eventId: eventIds } })
       : [];
-    const clubs = [...new Set(events.map((e) => e.clubId).filter(Boolean))].length
-      ? await Club.findAll({ where: { id: [...new Set(events.map((e) => e.clubId).filter(Boolean))] } })
+    const clubs = [...new Set(events.map((e) => e.clubId).filter(Boolean))]
+      .length
+      ? await Club.findAll({
+          where: {
+            id: [...new Set(events.map((e) => e.clubId).filter(Boolean))],
+          },
+        })
       : [];
 
     const clubMap = new Map(clubs.map((c) => [c.id, c]));

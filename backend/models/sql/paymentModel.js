@@ -1,4 +1,4 @@
-// backend/src/models/sql/paymentModel.js
+// backend/models/sql/paymentModel.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../../config/db");
 
