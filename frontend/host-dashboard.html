@@ -78,7 +78,7 @@
       </section>
 
       <!-- Tabs -->
-      <div class="flex gap-2 mb-4">
+      <div class="flex gap-3 mb-6">
         <button
           id="tab-events"
           class="px-4 py-2 rounded-full bg-primary-600 text-white text-sm"
@@ -90,6 +90,12 @@
           class="px-4 py-2 rounded-full bg-white border text-sm"
         >
           Bookings
+        </button>
+        <button
+          id="tab-clubs"
+          class="px-4 py-2 rounded-full bg-white border text-sm"
+        >
+          Clubs
         </button>
       </div>
 
@@ -139,6 +145,28 @@
 
         <div id="bookings-empty" class="text-sm text-slate-500 mt-4 hidden">
           No bookings found.
+        </div>
+      </section>
+
+      <section id="clubs-section" class="hidden">
+        <table class="w-full text-sm bg-white rounded-xl overflow-hidden">
+          <thead class="bg-slate-100">
+            <tr>
+              <th class="text-left px-4 py-2">Club</th>
+              <th>Category</th>
+              <th>Members</th>
+
+              <th class="text-right px-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="clubs-table-body"></tbody>
+        </table>
+
+        <div
+          id="clubs-empty"
+          class="hidden text-sm text-slate-500 text-center mt-4"
+        >
+          No clubs created yet.
         </div>
       </section>
 
