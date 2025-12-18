@@ -36,7 +36,12 @@ User.hasMany(Event, { foreignKey: "organizerId", as: "organizedEvents" });
 
 // --- TicketType & Event ---
 TicketType.belongsTo(Event, { foreignKey: "eventId", as: "event" });
-Event.hasMany(TicketType, { foreignKey: "eventId", as: "ticketTypes" });
+Event.hasMany(TicketType, {
+  foreignKey: "eventId",
+  onDelete: "CASCADE",
+  hooks: true,
+  as: "ticketTypes",
+});
 
 // ====================
 // Booking / Payment

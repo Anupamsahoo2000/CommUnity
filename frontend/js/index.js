@@ -165,7 +165,7 @@ function renderEvents(events) {
     // derive fields from backend event model
     const banner =
       ev.bannerUrl ||
-      "https://images.pexels.com/photos/2402777/pexels-photo-2402777.jpeg?auto=compress&cs=tinysrgb&w=800";
+      "https://images.unsplash.com/photo-1738626068354-bfede24d8c9c?q=80&w=1982&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
 
     const city = ev.city || "Online";
     const category = ev.category || "Events";

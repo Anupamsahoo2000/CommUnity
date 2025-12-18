@@ -6,6 +6,7 @@ const {
   getHostMetrics,
   getHostEvents,
   cancelHostEvent,
+  getHostBookings,
 } = require("../controllers/hostController");
 
 // All routes require authentication (host or admin)
@@ -18,5 +19,7 @@ router.post(
   authenticate(["HOST", "ADMIN"]),
   cancelHostEvent
 );
+
+router.get("/bookings", authenticate(["HOST", "ADMIN"]), getHostBookings);
 
 module.exports = router;

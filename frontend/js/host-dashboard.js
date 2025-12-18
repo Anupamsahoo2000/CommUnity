@@ -1,240 +1,188 @@
-// frontend/js/host-dashboard.js
-// ---------- Axios base config ----------
-if (window.axios) {
-  axios.defaults.baseURL = "http://localhost:5000";
-  axios.defaults.headers["Content-Type"] = "application/json";
-}
+// ---------- Axios ----------
+axios.defaults.baseURL = "http://localhost:5000";
+axios.defaults.headers["Content-Type"] = "application/json";
+
 const token = localStorage.getItem("community_token");
 if (token) axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-function q(id) {
-  return document.getElementById(id);
-}
+const ME = JSON.parse(localStorage.getItem("community_user") || "{}");
+
+const q = (id) => document.getElementById(id);
 function money(n) {
-  return typeof n === "number" ? `₹${n.toLocaleString()}` : n ?? "₹—";
+  const val = Number(n);
+  return !isNaN(val) ? `₹${val.toLocaleString()}` : "₹—";
 }
 
 let EVENTS = [];
-let WALLET = { available: 0, pending: 0, transactions: [] };
+let BOOKINGS = [];
 
+// ---------- Tabs ----------
+q("tab-events").onclick = () => switchTab("events");
+q("tab-bookings").onclick = () => switchTab("bookings");
+
+function switchTab(tab) {
+  if (tab === "events") {
+    q("events-section").classList.remove("hidden");
+    q("bookings-section").classList.add("hidden");
+    q("tab-events").className =
+      "px-4 py-2 rounded-full bg-primary-600 text-white text-sm";
+    q("tab-bookings").className =
+      "px-4 py-2 rounded-full bg-white border text-sm";
+  } else {
+    q("events-section").classList.add("hidden");
+    q("bookings-section").classList.remove("hidden");
+    q("tab-bookings").className =
+      "px-4 py-2 rounded-full bg-primary-600 text-white text-sm";
+    q("tab-events").className =
+      "px-4 py-2 rounded-full bg-white border text-sm";
+    fetchBookings();
+  }
+}
+
+// ---------- Metrics ----------
 async function fetchMetrics() {
-  try {
-    const res = await axios.get("/hosts/metrics");
-    const m = res?.data || {};
-    q("stat-total-revenue").textContent = money(m.totalRevenue ?? "—");
-    q("stat-active-events").textContent = m.activeEvents ?? "—";
-    q("stat-total-bookings").textContent = m.totalBookings ?? "—";
-    q("stat-wallet-balance").textContent = money(m.walletBalance ?? "—");
-  } catch (err) {
-    console.warn("Failed to fetch metrics", err);
-  }
+  const r = await axios.get("/hosts/metrics");
+  q("stat-total-revenue").textContent = money(r.data.totalRevenue);
+  q("stat-active-events").textContent = r.data.activeEvents;
+  q("stat-total-bookings").textContent = r.data.totalBookings;
 }
 
+// ---------- Events ----------
 async function fetchEvents() {
-  try {
-    const res = await axios.get("/hosts/events");
-    EVENTS = res?.data?.events || res?.data || [];
-    renderEventsTable(EVENTS);
-  } catch (err) {
-    console.error("Failed to fetch host events", err);
-    EVENTS = [];
-    renderEventsTable(EVENTS);
-  }
+  const r = await axios.get("/hosts/events");
+  EVENTS = r.data.events || [];
+  renderEvents();
 }
 
-function renderEventsTable(list) {
-  const tbody = q("events-table-body");
-  tbody.innerHTML = "";
-  if (!list || !list.length) {
+function renderEvents() {
+  const body = q("events-table-body");
+  body.innerHTML = "";
+
+  if (!EVENTS.length) {
     q("events-empty").classList.remove("hidden");
     return;
   }
+
   q("events-empty").classList.add("hidden");
 
-  list.forEach((ev) => {
+  EVENTS.forEach((ev) => {
     const tr = document.createElement("tr");
     tr.className = "border-t";
-    const statusColor =
-      ev.status === "PUBLISHED"
-        ? "text-emerald-600"
-        : ev.status === "DRAFT"
-        ? "text-slate-500"
-        : "text-slate-400";
+
     tr.innerHTML = `
-      <td class="py-3 px-2">${ev.title || "Untitled"}</td>
-      <td class="py-3 px-2 ${statusColor}">${ev.status || "—"}</td>
-      <td class="py-3 px-2">${ev.bookingsCount ?? 0}</td>
-      <td class="py-3 px-2">${money(ev.revenue ?? 0)}</td>
-      <td class="py-3 px-2">
-        <div class="flex gap-2">
-          <button data-id="${
-            ev.id
-          }" class="btn-edit px-2 py-1 text-xs rounded bg-white border">Edit</button>
-          <button data-id="${
-            ev.id
-          }" class="btn-analytics px-2 py-1 text-xs rounded bg-white border">Analytics</button>
-          <button data-id="${
-            ev.id
-          }" class="btn-cancel-event px-2 py-1 text-xs rounded border text-red-600">Cancel</button>
-        </div>
+      <td class="py-2">${ev.title}</td>
+      <td>${ev.status}</td>
+      <td>${ev.bookingsCount}</td>
+      <td>${money(ev.revenue)}</td>
+      <td class="flex gap-2">
+        <button class="text-sm border px-2" onclick="editEvent('${
+          ev.id
+        }')">Edit</button>
+        ${
+          ev.status === "PUBLISHED"
+            ? `<button class="text-sm border px-2 text-red-600" onclick="cancelEvent('${ev.id}')">Cancel</button>`
+            : ""
+        }
+        ${
+          ["CANCELLED", "COMPLETED", "DRAFT"].includes(ev.status)
+            ? `<button class="text-sm bg-red-600 text-white px-2" onclick="deleteEvent('${ev.id}')">Delete</button>`
+            : ""
+        }
       </td>
     `;
-    tbody.appendChild(tr);
+    body.appendChild(tr);
   });
-
-  // actions
-  tbody.querySelectorAll(".btn-edit").forEach((b) =>
-    b.addEventListener("click", (e) => {
-      const id = e.currentTarget.dataset.id;
-      window.location.href = `create-event.html?id=${id}`;
-    })
-  );
-
-  tbody.querySelectorAll(".btn-analytics").forEach((b) =>
-    b.addEventListener("click", (e) => {
-      const id = e.currentTarget.dataset.id;
-      window.location.href = `host-analytics.html?id=${id}`;
-    })
-  );
-
-  tbody.querySelectorAll(".btn-cancel-event").forEach((b) =>
-    b.addEventListener("click", (e) => {
-      const id = e.currentTarget.dataset.id;
-      confirmAction(
-        `Cancel event and refund bookings? This cannot be undone.`,
-        async () => {
-          await cancelEvent(id);
-        }
-      );
-    })
-  );
 }
 
-async function cancelEvent(eventId) {
-  try {
-    const resp = await axios.post(`/hosts/events/${eventId}/cancel`);
-    alert(resp?.data?.message || "Event cancelled.");
-    await refreshAll();
-  } catch (err) {
-    alert(err?.response?.data?.message || "Failed to cancel event.");
-  }
+window.editEvent = (id) =>
+  (window.location.href = `create-event.html?id=${id}`);
+
+async function cancelEvent(id) {
+  confirmAction("Cancel this event?", async () => {
+    await axios.post(`/events/${id}/cancel`);
+    fetchEvents();
+  });
 }
 
-async function fetchWallet() {
-  try {
-    const r = await axios.get("/wallet");
-    const d = r?.data || {};
-    WALLET = {
-      available: d.available ?? 0,
-      pending: d.pending ?? 0,
-      transactions: d.transactions || [],
-    };
-    renderWallet();
-  } catch (err) {
-    console.warn("Failed to fetch wallet", err);
-  }
+async function deleteEvent(id) {
+  confirmAction("Delete this event permanently?", async () => {
+    await axios.delete(`/events/${id}`);
+    fetchEvents();
+  });
 }
 
-function renderWallet() {
-  q("wallet-available").textContent = money(WALLET.available);
-  q("wallet-pending").textContent = money(WALLET.pending);
-  const list = q("tx-list");
-  list.innerHTML = "";
-  if (!WALLET.transactions.length) {
-    list.innerHTML = `<div class="text-slate-500 text-xs">No transactions yet.</div>`;
+// ---------- Bookings ----------
+async function fetchBookings() {
+  const r = await axios.get("/hosts/bookings");
+  BOOKINGS = r.data.bookings || [];
+  renderBookings();
+}
+
+function renderBookings() {
+  const body = q("bookings-table-body");
+  body.innerHTML = "";
+
+  if (!BOOKINGS.length) {
+    q("bookings-empty").classList.remove("hidden");
     return;
   }
-  WALLET.transactions.slice(0, 20).forEach((tx) => {
-    const div = document.createElement("div");
-    div.className = "flex items-center justify-between text-xs py-1 px-1";
-    div.innerHTML = `<div class="text-slate-700">${tx.type || "TX"}</div>
-                     <div class="text-slate-500">${new Date(
-                       tx.createdAt || Date.now()
-                     ).toLocaleDateString()}</div>
-                     <div class="font-medium">${money(tx.amount)}</div>`;
-    list.appendChild(div);
+
+  q("bookings-empty").classList.add("hidden");
+
+  BOOKINGS.forEach((b) => {
+    const tr = document.createElement("tr");
+    tr.className = "border-t";
+
+    tr.innerHTML = `
+      <td>${b.user?.name}</td>
+      <td>${b.event?.title}</td>
+      <td>${b.ticketType?.name}</td>
+      <td>${b.quantity}</td>
+      <td>${money(b.totalAmount ?? 0)}</td>
+      <td>
+        <select onchange="updateBooking('${b.id}', this.value)">
+          ${["PENDING", "CONFIRMED", "FAILED"].map(
+            (s) => `<option ${s === b.status ? "selected" : ""}>${s}</option>`
+          )}
+        </select>
+      </td>
+      <td>
+        <button class="text-red-600 text-xs" onclick="deleteBooking('${b.id}')">
+          Delete
+        </button>
+      </td>
+    `;
+    body.appendChild(tr);
   });
 }
 
+window.updateBooking = async (id, status) => {
+  await axios.put(`/bookings/${id}/status`, { status });
+};
+
+window.deleteBooking = async (id) => {
+  confirmAction("Delete booking?", async () => {
+    await axios.delete(`/bookings/${id}`);
+    fetchBookings();
+  });
+};
+
+// ---------- Confirm ----------
 function confirmAction(text, onOk) {
   q("confirm-text").textContent = text;
-  const modal = q("confirm-modal");
-  modal.classList.remove("hidden");
-  modal.style.display = "flex";
-  function cleanup() {
-    modal.classList.add("hidden");
-    modal.style.display = "";
-    q("confirm-ok").removeEventListener("click", okHandler);
-    q("confirm-cancel").removeEventListener("click", cancelHandler);
-  }
-  function okHandler() {
-    cleanup();
-    onOk && onOk();
-  }
-  function cancelHandler() {
-    cleanup();
-  }
-  q("confirm-ok").addEventListener("click", okHandler);
-  q("confirm-cancel").addEventListener("click", cancelHandler);
-}
+  q("confirm-modal").classList.remove("hidden");
 
-async function withdraw() {
-  confirmAction(
-    "Withdraw available balance to your linked bank account?",
-    async () => {
-      try {
-        const r = await axios.post("/wallet/withdraw", {
-          amount: WALLET.available,
-        });
-        alert(r?.data?.message || "Withdrawal initiated.");
-        await fetchWallet();
-      } catch (err) {
-        alert(err?.response?.data?.message || "Withdraw failed.");
-      }
-    }
-  );
-}
-
-async function refreshAll() {
-  await Promise.allSettled([fetchMetrics(), fetchEvents(), fetchWallet()]);
-}
-
-// Filters
-q("events-filter")?.addEventListener(
-  "input",
-  debounce(function (e) {
-    const v = e.target.value.toLowerCase().trim();
-    const filtered = EVENTS.filter((ev) => {
-      if (!v) return true;
-      return (
-        (ev.title || "").toLowerCase().includes(v) ||
-        (ev.status || "").toLowerCase().includes(v)
-      );
-    });
-    renderEventsTable(filtered);
-  }, 250)
-);
-
-q("refresh-btn")?.addEventListener("click", refreshAll);
-q("wallet-refresh-btn")?.addEventListener("click", fetchWallet);
-q("withdraw-btn")?.addEventListener("click", withdraw);
-
-// on load
-document.addEventListener("DOMContentLoaded", async () => {
-  // optionally show host name if stored
-  try {
-    const user = JSON.parse(localStorage.getItem("community_user") || "{}");
-    if (user && user.name) q("nav-user-name").textContent = user.name;
-  } catch (e) {}
-
-  await refreshAll();
-});
-
-// small debounce util
-function debounce(fn, wait = 200) {
-  let t;
-  return function (...args) {
-    clearTimeout(t);
-    t = setTimeout(() => fn.apply(this, args), wait);
+  q("confirm-ok").onclick = () => {
+    q("confirm-modal").classList.add("hidden");
+    onOk();
   };
+  q("confirm-cancel").onclick = () =>
+    q("confirm-modal").classList.add("hidden");
 }
+
+// ---------- Init ----------
+document.addEventListener("DOMContentLoaded", async () => {
+  if (ME?.name) q("nav-user-name").textContent = ME.name;
+  await fetchMetrics();
+  await fetchEvents();
+});

@@ -17,12 +17,12 @@ async function uploadPublicFile(
   key,
   contentType = "application/octet-stream"
 ) {
-  if (!process.env.AWS_S3_BUCKET) {
-    throw new Error("AWS_S3_BUCKET is not configured");
+  if (!process.env.AWS_BUCKET_NAME) {
+    throw new Error("AWS_BUCKET_NAME is not configured");
   }
 
   const params = {
-    Bucket: process.env.AWS_S3_BUCKET,
+    Bucket: process.env.AWS_BUCKET_NAME,
     Key: key,
     Body: buffer,
     ContentType: contentType,

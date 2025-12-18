@@ -45,23 +45,35 @@ function debounce(fn, wait) {
   };
 }
 
-// POST helper for AI endpoints
 async function fetchAiPredictive(text) {
   try {
     const r = await axios.post("/ai/predictive", { text });
     return r?.data?.suggestions || [];
   } catch (e) {
-    console.warn("AI predictive failed", e);
-    return [];
+    console.warn("AI predictive failed, fallback used");
+
+    // 🔥 fallback words so UI still works
+    return ["okay", "thanks", "sounds good", "sure"];
   }
 }
+
 async function fetchAiSmartReplies(message) {
   try {
-    const r = await axios.post("/ai/smart-replies", { message });
-    return r?.data?.replies || [];
-  } catch (e) {
-    console.warn("AI smart replies failed", e);
-    return [];
+    const res = await axios.post("/ai/smart-replies", {
+      message,
+    });
+
+    return res?.data?.suggestions || [];
+  } catch (err) {
+    console.warn("AI smart replies failed, using fallback");
+
+    // ✅ Fallback so UI never breaks
+    return [
+      "Sounds good 👍",
+      "Thanks for the update!",
+      "Got it!",
+      "See you there",
+    ];
   }
 }
 
@@ -186,10 +198,20 @@ function renderTicketTypes(ticketTypes) {
     });
   });
 
-  // initial selection
-  SELECTED_TICKET = ticketTypes[0];
-  SELECTED_QTY = 1;
-  updatePriceBreakdown(ticketTypes);
+  // ✅ Force default selection
+  const firstTicket = ticketTypes[0];
+  if (firstTicket) {
+    SELECTED_TICKET = firstTicket;
+    SELECTED_QTY = 1;
+
+    // force radio checked in DOM
+    const firstRadio = document.querySelector(
+      `input[name="ticket-type"][value="${firstTicket.id}"]`
+    );
+    if (firstRadio) firstRadio.checked = true;
+
+    updatePriceBreakdown(ticketTypes);
+  }
 }
 
 function updatePriceBreakdown(ticketTypes) {
@@ -308,6 +330,84 @@ function showDetailView() {
   qsel("event-booking-section")?.classList.remove("hidden");
 }
 
+// ---------- ROLE BASED CREATE EVENT BUTTON ----------
+(function setupCreateEventBtn() {
+  try {
+    const user = JSON.parse(localStorage.getItem("community_user") || "{}");
+    if (user.role === "HOST" || user.role === "ADMIN") {
+      qsel("create-event-btn")?.classList.remove("hidden");
+      qsel("host-dashboard-btn")?.classList.remove("hidden");
+    }
+  } catch {}
+})();
+
+// ---------- FILTER LOGIC (LIST MODE ONLY) ----------
+async function applyFilters() {
+  const params = {
+    q: qsel("filter-q")?.value || undefined,
+    city: qsel("filter-city")?.value || undefined,
+    category: qsel("filter-category")?.value || undefined,
+    date_from: qsel("filter-from")?.value || undefined,
+    date_to: qsel("filter-to")?.value || undefined,
+    price: qsel("filter-price")?.value || undefined,
+    limit: 100,
+  };
+
+  Object.keys(params).forEach(
+    (k) => params[k] === undefined && delete params[k]
+  );
+
+  const res = await axios.get("/events", { params });
+  const events = res.data?.data || [];
+  renderEventsGrid(events);
+}
+
+qsel("apply-filters")?.addEventListener("click", applyFilters);
+
+// ---------- EVENTS GRID RENDER ----------
+function renderEventsGrid(events) {
+  const grid = qsel("events-grid");
+  grid.innerHTML = "";
+
+  if (!events.length) {
+    grid.innerHTML =
+      '<div class="text-slate-500 col-span-full">No events found.</div>';
+    return;
+  }
+
+  events.forEach((ev) => {
+    const div = document.createElement("div");
+    div.className =
+      "bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition";
+
+    div.innerHTML = `
+      <div class="h-40 bg-slate-100">
+        ${
+          ev.bannerUrl
+            ? `<img src="${ev.bannerUrl}" class="w-full h-full object-cover"/>`
+            : ""
+        }
+      </div>
+      <div class="p-4">
+        <div class="text-xs text-slate-500">${ev.city || "Online"}</div>
+        <h3 class="font-semibold text-slate-900 mt-1">${ev.title}</h3>
+        <div class="text-xs text-slate-500 mt-1">
+          ${new Date(ev.startTime).toLocaleDateString()}
+        </div>
+        <div class="mt-2 text-sm font-medium">
+          ${ev.isFree ? "Free" : `₹${ev.basePrice}`}
+        </div>
+      </div>
+    `;
+
+    div.onclick = () => {
+      window.location.href = `event.html?id=${ev.id}`;
+    };
+
+    grid.appendChild(div);
+  });
+}
+
 /* ======================================================
    🟢 NEW: ALL EVENTS MODE (event.html without id)
    ====================================================== */
@@ -337,44 +437,45 @@ async function loadAllEvents() {
         '<p class="text-sm text-slate-500">No events available.</p>';
       return;
     }
-
-    events.forEach((ev) => {
-      const div = document.createElement("div");
-      div.className =
-        "border rounded-xl overflow-hidden cursor-pointer hover:shadow-md transition bg-white";
-
-      div.innerHTML = `
-        <div class="h-40 bg-slate-100">
-          ${
-            ev.bannerUrl
-              ? `<img src="${ev.bannerUrl}" class="w-full h-full object-cover" />`
-              : ""
-          }
-        </div>
-        <div class="p-3">
-          <div class="font-semibold text-sm">${ev.title}</div>
-          <div class="text-xs text-slate-500 mt-1">
-            ${ev.city || "Online"} · ${new Date(
-        ev.startTime
-      ).toLocaleDateString()}
-          </div>
-          <div class="text-xs font-medium mt-1">
-            ${ev.basePrice ? `₹${ev.basePrice}` : "Free"}
-          </div>
-        </div>
-      `;
-
-      div.addEventListener("click", () => {
-        window.location.href = `event.html?id=${ev.id}`;
-      });
-
-      grid.appendChild(div);
-    });
+    renderEventsGrid(events);
   } catch (err) {
     console.error(err);
     showError("Failed to load events.");
   } finally {
     loading?.classList.add("hidden");
+  }
+}
+function setupChatToggle() {
+  const openBtn = qsel("open-chat-btn");
+  const chatWidget = qsel("chat-widget");
+  const closeBtn = qsel("chat-close-btn");
+
+  if (!openBtn || !chatWidget) return;
+
+  openBtn.addEventListener("click", () => {
+    chatWidget.classList.remove("hidden");
+  });
+
+  closeBtn?.addEventListener("click", () => {
+    chatWidget.classList.add("hidden");
+  });
+}
+
+async function loadEventChatHistory(eventId) {
+  try {
+    const res = await axios.get(`/events/${eventId}/chat?limit=100`);
+    const messages = res.data?.data || [];
+
+    const box = qsel("chat-messages");
+    if (!box) return;
+
+    box.innerHTML = "";
+
+    messages.forEach((msg) => {
+      appendChatMessageWithSmart(msg);
+    });
+  } catch (err) {
+    console.error("Failed to load chat history", err);
   }
 }
 
@@ -444,27 +545,30 @@ async function loadEvent() {
     updateSeatsDisplay(event.seatsLeft ?? event.maxSeats ?? "—");
 
     let ticketTypes = [];
+
     try {
       const tResp = await axios.get(`/events/${id}/tickets`);
       ticketTypes = tResp?.data?.tickets || [];
-    } catch {
-      ticketTypes = [
-        {
-          id: "default",
-          name: "Regular",
-          price: event.basePrice || 0,
-          remaining: event.maxSeats || null,
-        },
-      ];
+    } catch (err) {
+      console.error("Failed to load ticket types", err);
+      ticketTypes = [];
     }
 
     renderTicketTypes(ticketTypes);
+
+    // ✅ FORCE price calculation AFTER render
+    if (ticketTypes.length) {
+      updatePriceBreakdown(ticketTypes);
+    }
 
     qsel("event-card")?.classList.remove("hidden");
     qsel("event-loading")?.classList.add("hidden");
 
     startSeatsLive(id);
     setupChat(id);
+    await loadEventChatHistory(id);
+    setupChatToggle();
+
     setupEventBannerUpload(id);
   } catch (err) {
     console.error(err);
@@ -573,13 +677,24 @@ async function bookNow() {
     const payResp = await axios.post(
       "/payments/create-order",
       { bookingId: booking.id },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    const { order_id, payment_session_id } = payResp.data || {};
-    console.log("Cashfree order:", order_id, payment_session_id);
+    const { payment_session_id } = payResp.data;
+
+    if (!payment_session_id) {
+      throw new Error("Payment session not received");
+    }
+    const bookingId = booking.id;
+
+    // store for after redirect
+    localStorage.setItem("pending_booking_id", bookingId);
+
+    const cashfree = Cashfree({ mode: "sandbox" });
+    await cashfree.checkout({
+      paymentSessionId: payment_session_id,
+      redirectTarget: "_self",
+    });
 
     if (resultBox) {
       resultBox.classList.remove("hidden");
@@ -602,6 +717,31 @@ async function bookNow() {
       btn.disabled = false;
       btn.textContent = "Book Now";
     }
+  }
+}
+
+async function handleCashfreeReturn() {
+  const bookingId = getParam("booking_id");
+  if (!bookingId) return;
+
+  const orderId = `booking_${bookingId}`;
+
+  try {
+    const res = await axios.get(`/payments/check/${orderId}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("community_token")}`,
+      },
+    });
+
+    if (res.data?.orderStatus === "SUCCESS") {
+      alert("✅ Payment successful! Booking confirmed.");
+      window.location.href = `dashboard.html?id=${bookingId}`;
+    } else {
+      //alert("⏳ Payment pending. Please refresh later.");
+    }
+  } catch (err) {
+    console.error("Payment check failed", err);
+    alert("Payment verification failed");
   }
 }
 
@@ -673,24 +813,33 @@ function addSmartReplyButtonToMessageEvent(domMessageEl, msgText) {
 function appendChatMessageWithSmart(msg) {
   const box = qsel("chat-messages");
   if (!box) return;
+
+  const me = JSON.parse(localStorage.getItem("community_user") || "{}");
+  const isMe = msg.senderId && String(msg.senderId) === String(me.id);
+
+  const displayName = isMe ? "You" : msg.senderName || "User";
+
   const el = document.createElement("div");
   el.className = `mb-2 ${
     msg.isOrganizer
       ? "text-sm font-medium text-primary-700"
       : "text-sm text-slate-700"
   }`;
-  el.innerHTML = `<div class="text-xs text-slate-500">${
-    msg.senderName || "User"
-  } · ${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
-                  <div class="chat-text">${msg.text}</div>`;
+
+  el.innerHTML = `
+    <div class="text-xs text-slate-500">
+      ${displayName} · ${new Date(msg.createdAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}
+    </div>
+    <div class="chat-text">${msg.text}</div>
+  `;
+
   box.appendChild(el);
 
-  // add smart reply button for messages not from current user
-  const me = JSON.parse(localStorage.getItem("community_user") || "{}");
-  if (
-    (msg.senderId && String(msg.senderId) !== String(me.id)) ||
-    !msg.senderId
-  ) {
+  // Smart reply only for OTHER users
+  if (!isMe) {
     addSmartReplyButtonToMessageEvent(el, msg.text);
   }
 
@@ -711,7 +860,8 @@ function showPredictiveSuggestions(items) {
 
   items.forEach((it) => {
     const btn = document.createElement("button");
-    btn.className = "px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200";
+    btn.className =
+      "px-2 py-1 text-xs text-black rounded bg-slate-100 hover:bg-slate-200";
     btn.textContent = it;
     btn.addEventListener("click", () => {
       const input = qsel("chat-input");
@@ -725,18 +875,25 @@ function showPredictiveSuggestions(items) {
 }
 
 const predictiveDebounced = debounce(async (text) => {
-  if (!text || text.trim().length < 2) {
+  if (!text || text.length < 3) {
     showPredictiveSuggestions([]);
     return;
   }
   const suggestions = await fetchAiPredictive(text.trim());
-  showPredictiveSuggestions(suggestions.slice(0, 5));
-}, 350);
+  showPredictiveSuggestions(suggestions.slice(0, 3));
+}, 1000); // 🔥 1 second debounce
 
 function attachPredictiveTypingToChat() {
   const input = qsel("chat-input");
-  if (!input) return;
+  if (!input) {
+    console.error("❌ chat-input NOT FOUND");
+    return;
+  }
+
+  console.log("✅ Predictive typing attached");
+
   input.addEventListener("input", (ev) => {
+    console.log("⌨️ typing:", ev.target.value);
     predictiveDebounced(ev.target.value);
   });
 }
@@ -750,53 +907,58 @@ function setupChat(eventId) {
   const input = qsel("chat-input");
 
   if (!openBtn || !chatWidget) return;
-  openBtn.addEventListener("click", () =>
-    chatWidget.classList.toggle("hidden")
-  );
+
+  openBtn.addEventListener("click", () => {
+    chatWidget.classList.toggle("hidden");
+
+    // optional: scroll to bottom
+    const box = qsel("chat-messages");
+    if (box) box.scrollTop = box.scrollHeight;
+  });
+
   closeBtn?.addEventListener("click", () => chatWidget.classList.add("hidden"));
 
-  // send message
+  // send message (unchanged)
   sendBtn?.addEventListener("click", async () => {
     const text = input.value.trim();
     if (!text) return;
 
-    // optimistic append
     appendChatMessage({ senderName: "You", text, createdAt: Date.now() });
     input.value = "";
 
     try {
-      if (socket && socket.connected) {
-        socket.emit("chat_message", { eventId, text });
-      } else {
-        // REST fallback
-        await axios.post(`/events/${eventId}/chat`, { text });
-      }
+      await axios.post(
+        `/events/${eventId}/chat`,
+        { text },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("community_token")}`,
+          },
+        }
+      );
     } catch (err) {
       console.warn("Failed to send chat message", err);
     }
   });
 
-  // typing indicator emit
-  input?.addEventListener("input", () => {
-    if (socket && socket.connected)
-      socket.emit("typing", {
-        eventId,
-        user:
-          JSON.parse(localStorage.getItem("community_user") || "{}").name ||
-          "Someone",
-      });
-  });
-
-  // attach predictive typing
   attachPredictiveTypingToChat();
 }
 
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", () => {
   qsel("book-now-btn")?.addEventListener("click", bookNow);
-  qsel("open-chat-btn")?.addEventListener("click", () => {
-    qsel("chat-widget")?.classList.toggle("hidden");
-  });
-
+  handleCashfreeReturn();
+  const pending = localStorage.getItem("pending_booking_id");
+  if (pending && !getParam("booking_id")) {
+    axios
+      .get(`/payments/check/booking_${pending}`)
+      .then((r) => {
+        if (r.data?.orderStatus === "SUCCESS") {
+          localStorage.removeItem("pending_booking_id");
+          window.location.href = `dashboard.html?id=${pending}`;
+        }
+      })
+      .catch(() => {});
+  }
   loadEvent();
 });

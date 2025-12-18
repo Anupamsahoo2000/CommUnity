@@ -18,11 +18,11 @@ const Event = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    slug: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true,
-    },
+    // slug: {
+    //   type: DataTypes.STRING,
+    //   allowNull: false,
+    //   unique: true,
+    // },
     description: {
       type: DataTypes.TEXT,
       allowNull: true,

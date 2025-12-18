@@ -206,9 +206,9 @@ const cancelBooking = async (req, res) => {
 
     const bookingId = req.params.id;
 
+    // 1️⃣ Lock BOOKING ONLY (NO include)
     const booking = await Booking.findOne({
       where: { id: bookingId, userId },
-      include: [{ model: Event, as: "event", attributes: ["id", "startTime"] }],
       transaction: t,
       lock: t.LOCK.UPDATE,
     });
@@ -220,24 +220,39 @@ const cancelBooking = async (req, res) => {
 
     if (!["PENDING", "CONFIRMED"].includes(booking.status)) {
       await t.rollback();
-      return res
-        .status(400)
-        .json({ message: "Booking cannot be cancelled in its current state" });
+      return res.status(400).json({
+        message: "Booking cannot be cancelled in its current state",
+      });
+    }
+
+    // 2️⃣ Load EVENT separately (no lock, no join)
+    const event = await Event.findByPk(booking.eventId, {
+      attributes: ["id", "startTime"],
+      transaction: t,
+    });
+
+    if (!event) {
+      await t.rollback();
+      return res.status(404).json({ message: "Event not found" });
     }
 
     const now = new Date();
-    if (booking.event?.startTime && new Date(booking.event.startTime) < now) {
+    if (event.startTime && new Date(event.startTime) < now) {
       await t.rollback();
-      return res
-        .status(400)
-        .json({ message: "Event has already started; cannot cancel" });
+      return res.status(400).json({
+        message: "Event has already started; cannot cancel booking",
+      });
     }
 
+    // 3️⃣ Cancel booking
     booking.status = "CANCELLED";
     await booking.save({ transaction: t });
 
     await t.commit();
-    return res.json({ message: "Booking cancelled", bookingId: booking.id });
+    return res.json({
+      message: "Booking cancelled successfully",
+      bookingId: booking.id,
+    });
   } catch (err) {
     console.error("cancelBooking error:", err);
     await t.rollback();
@@ -280,9 +295,94 @@ const expireStaleBookings = async (req, res) => {
   }
 };
 
+const updateBookingStatus = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { status } = req.body;
+
+    const allowed = ["PENDING", "CONFIRMED", "FAILED", "CANCELLED"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const booking = await Booking.findByPk(bookingId, {
+      include: [
+        {
+          model: Event,
+          as: "event",
+          attributes: ["id", "organizerId"],
+        },
+      ],
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // Permission check
+    if (
+      req.user.role !== "ADMIN" &&
+      String(booking.event.organizerId) !== String(req.user.id)
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    booking.status = status;
+    await booking.save();
+
+    return res.json({
+      success: true,
+      message: "Booking status updated",
+      booking,
+    });
+  } catch (err) {
+    console.error("updateBookingStatus error:", err);
+    return res.status(500).json({ message: "Failed to update booking" });
+  }
+};
+const deleteBooking = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+
+    const booking = await Booking.findByPk(bookingId, {
+      include: [
+        {
+          model: Event,
+          as: "event",
+          attributes: ["id", "organizerId"],
+        },
+      ],
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // Permission check
+    if (
+      req.user.role !== "ADMIN" &&
+      String(booking.event.organizerId) !== String(req.user.id)
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    await booking.destroy();
+
+    return res.json({
+      success: true,
+      message: "Booking deleted",
+    });
+  } catch (err) {
+    console.error("deleteBooking error:", err);
+    return res.status(500).json({ message: "Failed to delete booking" });
+  }
+};
+
 module.exports = {
   createBooking,
   getMyBookings,
   cancelBooking,
   expireStaleBookings,
+  updateBookingStatus,
+  deleteBooking,
 };

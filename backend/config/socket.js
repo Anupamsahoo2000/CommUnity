@@ -19,7 +19,7 @@ function initSocket(server) {
     console.log("🔌 Socket connected:", socket.id);
 
     // Join event room for live seats updates / chat
-    socket.on("join_event", (eventId) => {
+    socket.on("join_event_room", (eventId) => {
       if (!eventId) return;
       const room = `event:${eventId}`;
       socket.join(room);

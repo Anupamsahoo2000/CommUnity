@@ -148,16 +148,15 @@ const createEvent = async (req, res) => {
       description,
       category,
       city,
-      location, // free-text location/address (we now store this)
+      location,
       lat: latBody,
       lng: lngBody,
       startTime,
       endTime,
       maxSeats,
-      isFree,
-      basePrice,
       clubId,
-      status: requestedStatus, // allow client to optionally set status (DRAFT / PUBLISHED)
+      status: requestedStatus,
+      ticketTypes = [], // 👈 IMPORTANT
     } = req.body;
 
     if (!title || !startTime) {
@@ -166,25 +165,17 @@ const createEvent = async (req, res) => {
         .json({ message: "Title and startTime are required" });
     }
 
-    if (!req.user || !req.user.id) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized: login required to create event" });
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (clubId) {
-      const club = await Club.findByPk(clubId);
-      if (!club)
-        return res
-          .status(400)
-          .json({ message: "Provided clubId does not exist" });
-    }
-
-    // parse lat/lng as numbers if provided
+    // -------------------------------
+    // GEO LOGIC (unchanged)
+    // -------------------------------
     let lat = parseLatLng(latBody);
     let lng = parseLatLng(lngBody);
 
-    if ((lat === null || lng === null) && location) {
+    if ((lat == null || lng == null) && location) {
       const geo = await geocodeLocation(location);
       if (geo) {
         lat = geo.lat;
@@ -192,7 +183,7 @@ const createEvent = async (req, res) => {
       }
     }
 
-    if ((lat === null || lng === null) && city) {
+    if ((lat == null || lng == null) && city) {
       const geo = await geocodeLocation(city);
       if (geo) {
         lat = geo.lat;
@@ -200,42 +191,70 @@ const createEvent = async (req, res) => {
       }
     }
 
-    // Default status (keep existing behavior) — change to "DRAFT" if you prefer default drafts.
-    const finalStatus = requestedStatus || "PUBLISHED";
-    if (String(finalStatus).toUpperCase() === "PUBLISHED") {
-      if (lat === null || lng === null) {
-        return res.status(400).json({
-          message:
-            "Geocoding required for published events. Provide lat & lng or a resolvable location/city.",
-        });
-      }
+    const status = requestedStatus || "PUBLISHED";
+    if (status === "PUBLISHED" && (lat == null || lng == null)) {
+      return res.status(400).json({
+        message: "lat/lng required for published events",
+      });
     }
 
-    const organizerId = req.user.id;
-    const slugBase = title + (city ? ` ${city}` : "");
-    const slug = slugify(slugBase) + "-" + Date.now().toString(36).slice(-6);
+    // -------------------------------
+    // 🔑 PRICING LOGIC (FIX)
+    // -------------------------------
+    const normalizedTickets = Array.isArray(ticketTypes)
+      ? ticketTypes.map((t) => ({
+          name: t.name,
+          price: Number(t.price || 0),
+          quota: Number(t.quota || 0),
+        }))
+      : [];
 
-    const ev = await Event.create({
+    const isFree =
+      normalizedTickets.length === 0 ||
+      normalizedTickets.every((t) => t.price === 0);
+
+    const basePrice =
+      normalizedTickets.length > 0
+        ? Math.min(...normalizedTickets.map((t) => t.price))
+        : 0;
+
+    // -------------------------------
+    // CREATE EVENT
+    // -------------------------------
+    const event = await Event.create({
       title,
-      slug,
-      description: description || null,
-      category: category || null,
-      city: city || null,
-      location: location ? String(location).trim() : null,
-      lat: lat ?? null,
-      lng: lng ?? null,
+      description,
+      category,
+      city,
+      location,
+      lat,
+      lng,
       startTime,
       endTime: endTime || null,
-      maxSeats: maxSeats ?? null,
-      isFree: isFree === undefined ? true : !!isFree,
-      basePrice: basePrice ?? 0,
-      status: finalStatus,
-      bannerUrl: req.body.bannerUrl || null,
+      maxSeats,
+      status,
+      isFree, // ✅ derived
+      basePrice, // ✅ derived
+      organizerId: req.user.id,
       clubId: clubId || null,
-      organizerId,
     });
 
-    return res.status(201).json({ event: ev });
+    // -------------------------------
+    // CREATE TICKET TYPES 🔥
+    // -------------------------------
+    for (const t of normalizedTickets) {
+      if (!t.name || t.quota <= 0) continue;
+
+      await TicketType.create({
+        eventId: event.id,
+        name: t.name,
+        price: t.price,
+        quota: t.quota,
+        isActive: true,
+      });
+    }
+
+    return res.status(201).json({ event });
   } catch (err) {
     console.error("createEvent error:", err);
     return res.status(500).json({ message: "Failed to create event" });
@@ -436,13 +455,16 @@ const getEventTickets = async (req, res) => {
     }
 
     const tickets = await TicketType.findAll({
-      where: { eventId },
+      where: {
+        eventId,
+        isActive: true, // 🔥 IMPORTANT (matches booking logic)
+      },
       order: [["price", "ASC"]],
-      attributes: ["id", "name", "price", "quota"], // add more columns if you have them
+      attributes: ["id", "name", "price", "quota"],
     });
 
-    // 200 with [] is fine; frontend will show "No ticket types available."
-    return res.json({ data: tickets });
+    // ✅ MUST return `tickets`, not `data`
+    return res.json({ tickets });
   } catch (err) {
     console.error("getEventTickets error:", err);
     return res.status(500).json({ message: "Failed to load ticket types" });
@@ -653,6 +675,133 @@ const uploadEventBanner = async (req, res) => {
   }
 };
 
+// CANCEL EVENT
+// POST /events/:id/cancel
+const cancelEvent = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const event = await Event.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // Already cancelled
+    if (event.status === "CANCELLED") {
+      return res.status(400).json({ message: "Event already cancelled" });
+    }
+
+    // Permission checks
+    const isAdmin = user.role === "ADMIN";
+    const isOrganizer = String(event.organizerId) === String(user.id);
+
+    let isClubOwner = false;
+    if (event.clubId) {
+      const club = await Club.findByPk(event.clubId);
+      if (club && String(club.ownerId) === String(user.id)) {
+        isClubOwner = true;
+      }
+    }
+
+    if (!isAdmin && !isOrganizer && !isClubOwner) {
+      return res.status(403).json({
+        message: "Forbidden: not allowed to cancel this event",
+      });
+    }
+
+    // Prevent cancelling completed events
+    const now = new Date();
+    if (event.startTime && new Date(event.startTime) < now) {
+      return res.status(400).json({
+        message: "Event has already started or completed",
+      });
+    }
+
+    // Cancel event
+    event.status = "CANCELLED";
+    await event.save();
+
+    /**
+     * 🔜 Future enhancements:
+     * - Refund CONFIRMED bookings
+     * - Release seats via seatsService
+     * - Notify users (email / socket)
+     */
+
+    return res.json({
+      message: "Event cancelled successfully",
+      eventId: event.id,
+      status: event.status,
+    });
+  } catch (err) {
+    console.error("cancelEvent error:", err);
+    return res.status(500).json({ message: "Failed to cancel event" });
+  }
+};
+
+// DELETE EVENT (Only CANCELLED / COMPLETED/DRAFT events)
+const deleteEvent = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const event = await Event.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // ❗ Status guard
+    if (!["CANCELLED", "COMPLETED", "DRAFT"].includes(event.status)) {
+      return res.status(400).json({
+        message: "Only cancelled, completed, or draft events can be deleted",
+      });
+    }
+
+    // Permission checks
+    const isAdmin = user.role === "ADMIN";
+    const isOrganizer = String(event.organizerId) === String(user.id);
+
+    let isClubOwner = false;
+    if (event.clubId) {
+      const club = await Club.findByPk(event.clubId);
+      if (club && String(club.ownerId) === String(user.id)) {
+        isClubOwner = true;
+      }
+    }
+
+    if (!isAdmin && !isOrganizer && !isClubOwner) {
+      return res.status(403).json({
+        message: "Forbidden: not allowed to delete this event",
+      });
+    }
+
+    /**
+     * 🔴 Important:
+     * We DO NOT cascade delete bookings/payments here.
+     * Those stay for audit & finance history.
+     */
+
+    await event.destroy();
+
+    return res.json({
+      message: "Event deleted successfully",
+      eventId,
+    });
+  } catch (err) {
+    console.error("deleteEvent error:", err);
+    return res.status(500).json({ message: "Failed to delete event" });
+  }
+};
+
 module.exports = {
   getEvents,
   createEvent,
@@ -664,4 +813,6 @@ module.exports = {
   getEventChat,
   postEventChat,
   uploadEventBanner,
+  cancelEvent,
+  deleteEvent,
 };

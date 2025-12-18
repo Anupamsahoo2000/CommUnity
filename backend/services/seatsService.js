@@ -1,6 +1,6 @@
 // backend/services/seatsService.js
 const sequelize = require("../config/db");
-const { Op } = sequelize;
+const { Op } = require("sequelize");
 const { TicketType, Booking } = require("../models/sql/index");
 
 /**

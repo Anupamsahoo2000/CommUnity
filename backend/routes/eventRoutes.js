@@ -12,6 +12,8 @@ const {
   getEventChat,
   postEventChat,
   uploadEventBanner,
+  cancelEvent,
+  deleteEvent,
 } = require("../controllers/eventController");
 const authenticate = require("../middleware/jwt");
 const upload = require("../middleware/upload");
@@ -44,5 +46,7 @@ router.post(
 // Protected: create / update event
 router.post("/", authenticate(["HOST", "ADMIN"]), createEvent);
 router.put("/:id", authenticate(["HOST", "ADMIN"]), updateEvent);
+router.post("/:id/cancel", authenticate(["HOST", "ADMIN"]), cancelEvent);
+router.delete("/:id", authenticate(["HOST", "ADMIN"]), deleteEvent);
 
 module.exports = router;

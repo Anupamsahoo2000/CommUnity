@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>CommUnity — Event details</title>
+    <title>CommUnity — Events</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -25,11 +25,9 @@
       };
     </script>
 
-    <!-- Axios -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <!-- Socket.io client for chat -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <style>
       .card-shadow {
         box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
@@ -40,202 +38,258 @@
       }
     </style>
   </head>
+
   <body class="bg-slate-50 min-h-screen">
+    <!-- HEADER -->
     <header class="bg-white shadow-sm">
       <div
         class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between"
       >
-        <a href="index.html" class="font-semibold text-lg text-primary-700"
-          >CommUnity</a
-        >
-        <div class="text-sm text-slate-600">
-          <a href="index.html" class="hover:text-primary-600">Back</a>
+        <a href="index.html" class="font-semibold text-lg text-primary-700">
+          CommUnity
+        </a>
+
+        <div class="flex items-center gap-3">
+          <nav class="hidden sm:flex items-center gap-3 text-sm text-slate-600">
+            <a href="clubs.html" class="hover:text-primary-600">Clubs</a>
+            <a href="dashboard.html" class="hover:text-primary-600"
+              >Dashboard</a
+            >
+            <a
+              id="host-dashboard-btn"
+              href="host-dashboard.html"
+              class="hidden hover:text-primary-600"
+            >
+              Host Dashboard
+            </a>
+
+            <a
+              id="create-event-btn"
+              href="create-event.html"
+              class="hidden px-4 py-2 rounded-full bg-primary-600 text-white text-sm"
+            >
+              + Create Event
+            </a>
+            <a
+              href="index.html"
+              class="text-sm text-slate-600 hover:text-primary-600"
+            >
+              Back
+            </a>
+          </nav>
         </div>
       </div>
     </header>
 
-    <main
-      class="max-w-7xl mx-auto mt-6 px-4 grid grid-cols-1 lg:grid-cols-3 gap-6"
-    >
-      <!-- EVENTS LIST VIEW -->
+    <main id="page-root" class="max-w-7xl mx-auto mt-6 px-4">
+      <!-- FILTER BAR (LIST MODE ONLY) -->
+      <section
+        id="filters-bar"
+        class="mb-6 bg-white rounded-xl shadow-sm border p-4"
+      >
+        <div class="flex flex-wrap gap-3 items-center">
+          <input
+            id="filter-q"
+            placeholder="Search events..."
+            class="px-3 py-2 text-sm border rounded-lg w-44"
+          />
+          <input
+            id="filter-city"
+            placeholder="City"
+            class="px-3 py-2 text-sm border rounded-lg w-32"
+          />
+          <select
+            id="filter-category"
+            class="px-3 py-2 text-sm border rounded-lg"
+          >
+            <option value="">All categories</option>
+            <option value="Sports">Sports</option>
+            <option value="Tech">Tech</option>
+            <option value="Music">Music</option>
+            <option value="Fitness">Fitness</option>
+            <option value="Community">Community</option>
+          </select>
+          <input
+            type="date"
+            id="filter-from"
+            class="px-3 py-2 text-sm border rounded-lg"
+          />
+          <input
+            type="date"
+            id="filter-to"
+            class="px-3 py-2 text-sm border rounded-lg"
+          />
+          <select id="filter-price" class="px-3 py-2 text-sm border rounded-lg">
+            <option value="">All</option>
+            <option value="free">Free</option>
+            <option value="paid">Paid</option>
+          </select>
+          <button
+            id="apply-filters"
+            class="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm"
+          >
+            Apply
+          </button>
+        </div>
+      </section>
+
+      <!-- EVENTS LIST -->
       <section id="events-list-view" class="hidden">
         <div
           id="events-grid"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
         ></div>
       </section>
 
-      <!-- EVENT DETAILS VIEW -->
-      <section id="event-detail-view" class="hidden">
-        <!-- your existing event detail HTML -->
-      </section>
+      <!-- DETAIL VIEW -->
+      <section
+        id="event-detail-view"
+        class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6"
+      >
+        <!-- LEFT: EVENT DETAILS -->
+        <section class="lg:col-span-2">
+          <div id="event-loading" class="text-center py-12">
+            Loading event...
+          </div>
 
-      <!-- LEFT: banner + meta + description -->
-      <section class="lg:col-span-2">
-        <div id="event-loading" class="text-center py-12">Loading event...</div>
+          <article
+            id="event-card"
+            class="hidden bg-white rounded-2xl shadow overflow-hidden"
+          >
+            <!-- Banner -->
+            <div id="event-banner" class="h-72 bg-slate-200"></div>
 
-        <article
-          id="event-card"
-          class="hidden bg-white rounded-2xl card-shadow overflow-hidden"
-        >
-          <div id="event-banner" class="h-72 bg-gray-100"></div>
-
-          <div class="p-6">
-            <div class="flex items-start justify-between gap-4">
+            <!-- Content -->
+            <div class="p-6 space-y-4">
               <div>
                 <h1
                   id="event-title"
                   class="text-2xl font-semibold text-slate-900"
                 ></h1>
-                <div class="mt-1 text-sm text-slate-500" id="event-tags"></div>
-                <p id="event-meta" class="text-sm text-slate-500 mt-2"></p>
+                <p id="event-meta" class="text-sm text-slate-500 mt-1"></p>
               </div>
 
-              <div id="event-banner-upload-wrap" class="hidden px-6 mt-4">
-                <label class="block text-xs text-slate-500 mb-1">
-                  Update event banner (Hosts only)
-                </label>
-                <div class="flex items-center gap-2">
-                  <input
-                    id="event-banner-input"
-                    type="file"
-                    accept="image/*"
-                    class="text-xs"
-                  />
-                  <button
-                    id="event-banner-upload-btn"
-                    class="px-3 py-1.5 rounded-full bg-primary-600 text-white text-xs"
-                  >
-                    Upload
-                  </button>
+              <div
+                id="event-desc"
+                class="prose max-w-none text-slate-700"
+              ></div>
+
+              <div class="bg-slate-50 rounded-lg p-4">
+                <h3 class="text-sm font-semibold mb-2">Rules & Cancellation</h3>
+                <div id="event-rules" class="text-sm text-slate-600">
+                  No refunds after event start.
                 </div>
-                <div
-                  id="event-banner-upload-msg"
-                  class="mt-1 text-xs text-slate-500"
-                ></div>
               </div>
+            </div>
+          </article>
 
-              <div class="text-right">
-                <div class="text-xs text-slate-500 mb-1">Seats left</div>
-                <div
-                  id="seats-left"
-                  class="text-xl font-semibold text-slate-900"
-                >
+          <div
+            id="event-error"
+            class="hidden mt-4 text-center text-red-600"
+          ></div>
+        </section>
+
+        <!-- RIGHT: BOOKING + CHAT -->
+        <aside id="event-booking-section" class="lg:col-span-1">
+          <div class="sticky top-24 space-y-4">
+            <!-- BOOKING CARD -->
+            <div class="bg-white rounded-2xl shadow p-4">
+              <div class="mb-3">
+                <div class="text-xs text-slate-500">Price</div>
+                <div id="ticket-base-price" class="text-xl font-semibold">
                   —
                 </div>
               </div>
-            </div>
 
-            <div
-              class="mt-6 prose max-w-none text-slate-700"
-              id="event-desc"
-            ></div>
+              <div id="ticket-types" class="space-y-3"></div>
 
-            <div class="mt-6 bg-slate-50 rounded-lg p-4">
-              <h3 class="text-sm font-semibold mb-2">What’s included</h3>
-              <ul
-                id="event-includes"
-                class="list-disc ml-5 text-sm text-slate-600"
-              ></ul>
-
-              <h3 class="text-sm font-semibold mt-4 mb-2">
-                Rules & Cancellation
-              </h3>
-              <div id="event-rules" class="text-sm text-slate-600"></div>
-            </div>
-          </div>
-        </article>
-
-        <div
-          id="event-error"
-          class="hidden mt-6 text-center text-red-600"
-        ></div>
-      </section>
-
-      <!-- RIGHT: ticket panel -->
-      <aside id="event-booking-section" class="lg:col-span-1">
-        <div class="sticky top-24">
-          <div class="bg-white rounded-2xl p-4 card-shadow">
-            <div class="mb-3">
-              <div class="text-xs text-slate-500">Price</div>
-              <div id="ticket-base-price" class="text-xl font-semibold">—</div>
-            </div>
-
-            <!-- ticket types -->
-            <div id="ticket-types" class="space-y-3 mb-3"></div>
-
-            <!-- price breakdown -->
-            <div class="border-t border-slate-100 pt-3 space-y-2">
-              <div class="flex justify-between text-sm text-slate-600">
-                <span>Base price</span><span id="break-base">—</span>
+              <div class="border-t pt-3 mt-3 space-y-2">
+                <div class="flex justify-between text-sm">
+                  <span>Base</span>
+                  <span id="break-base">—</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                  <span>Platform fee</span>
+                  <span id="break-fee">—</span>
+                </div>
+                <div class="flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span id="break-total">—</span>
+                </div>
               </div>
-              <div class="flex justify-between text-sm text-slate-600">
-                <span>Platform fee</span><span id="break-fee">—</span>
-              </div>
-              <div class="flex justify-between text-sm font-semibold">
-                <span>Total</span><span id="break-total">—</span>
-              </div>
-            </div>
-            <div class="mt-4">
+
               <button
                 id="book-now-btn"
-                class="w-full px-4 py-2 rounded-full bg-primary-600 text-white disabled:opacity-60"
+                class="mt-4 w-full py-2 rounded-full bg-primary-600 text-white"
               >
                 Book Now
               </button>
-            </div>
-            <div id="booking-result" class="mt-3 text-sm hidden"></div>
-          </div>
 
-          <!-- Chat widget -->
-          <div
-            id="chat-widget"
-            class="mt-4 chat-box fixed right-4 bottom-6 bg-white rounded-2xl shadow-lg overflow-hidden hidden"
-          >
-            <div class="p-3 border-b flex items-center justify-between">
-              <div class="text-sm font-semibold">Event Chat</div>
-              <button id="chat-close-btn" class="text-xs text-slate-500">
-                Close
-              </button>
+              <div id="booking-result" class="mt-3 text-sm hidden"></div>
             </div>
+
+            <!-- CHAT BUTTON -->
+            <button
+              id="open-chat-btn"
+              class="w-full py-2 rounded-full border bg-white"
+            >
+              Open Event Chat
+            </button>
+            <!-- CHAT WIDGET -->
             <div
-              id="chat-messages"
-              class="p-3 h-56 overflow-y-auto text-sm"
-            ></div>
-            <div class="p-3 border-t">
-              <div class="flex gap-2">
-                <input
-                  id="chat-input"
-                  class="flex-1 px-3 py-2 border rounded-full text-sm"
-                  placeholder="Say hi to participants..."
-                />
+              id="chat-widget"
+              class="hidden fixed bottom-6 right-6 w-80 bg-white rounded-2xl shadow-lg overflow-hidden z-50"
+            >
+              <!-- Header -->
+              <div class="p-3 border-b flex justify-between items-center">
+                <div class="text-sm font-semibold">Event Chat</div>
                 <button
-                  id="chat-send"
-                  class="px-3 py-2 rounded-full bg-primary-600 text-white text-sm"
+                  id="chat-close-btn"
+                  class="text-xs text-slate-500 hover:text-red-500"
                 >
-                  Send
+                  Close
                 </button>
+              </div>
+
+              <!-- Messages -->
+              <div
+                id="chat-messages"
+                class="p-3 h-64 text-black overflow-y-auto text-sm space-y-2"
+              ></div>
+
+              <!-- Input -->
+              <div class="p-3 border-t">
+                <div class="flex gap-2 relative">
+                  <input
+                    id="chat-input"
+                    class="flex-1 px-3 py-2 border rounded-full text-sm"
+                    placeholder="Type a message…"
+                  />
+                  <button
+                    id="chat-send"
+                    class="px-3 py-2 rounded-full bg-blue-600 text-white text-sm"
+                  >
+                    Send
+                  </button>
+                </div>
+
+                <div
+                  id="chat-typing"
+                  class="text-xs text-slate-500 mt-2 hidden"
+                >
+                  Someone is typing...
+                </div>
+
                 <div
                   id="chat-ai-suggestions"
-                  class="mt-2 flex gap-2 hidden"
+                  class="mt-2 flex flex-wrap gap-2 bg-white text-black border p-2 rounded shadow absolute z-50"
                 ></div>
-              </div>
-              <div id="chat-typing" class="text-xs text-slate-500 mt-2 hidden">
-                Someone is typing...
               </div>
             </div>
           </div>
-
-          <button
-            id="open-chat-btn"
-            class="mt-3 w-full px-4 py-2 text-sm rounded-full bg-white border hover:bg-slate-50"
-          >
-            Open Event Chat
-          </button>
-        </div>
-      </aside>
+        </aside>
+      </section>
     </main>
-
     <script src="js/event.js" defer></script>
   </body>
 </html>

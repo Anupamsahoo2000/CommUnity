@@ -9,77 +9,65 @@ const {
   Wallet,
   WalletTransaction,
   User,
+  TicketType,
 } = require("../models/sql");
 
 /**
  * GET /hosts/metrics
  * Return: { totalRevenue, activeEvents, totalBookings, walletBalance }
  */
+
 const getHostMetrics = async (req, res) => {
   try {
     const hostId = req.user?.id;
     if (!hostId) return res.status(401).json({ message: "Unauthorized" });
 
-    // 1) Active events
-    const activeEventsCount = await Event.count({
+    const activeEvents = await Event.count({
       where: { organizerId: hostId, status: "PUBLISHED" },
     });
 
-    // 2) Total bookings (all bookings for events organized by this host)
     const totalBookings = await Booking.count({
-      where: {},
       include: [
         {
           model: Event,
           as: "event",
           required: true,
           where: { organizerId: hostId },
-          attributes: [],
         },
       ],
     });
 
-    // 3) Total revenue: Sum of netAmount (preferred) or payment.amount for SUCCESS payments
-    // Join payments -> bookings -> events
     const revenueRow = await Payment.findOne({
       attributes: [
-        [fn("COALESCE", fn("SUM", col("Payment.netAmount")), 0), "totalNet"],
+        [fn("COALESCE", fn("SUM", col("Payment.amount")), 0), "totalRevenue"],
       ],
       where: { status: "SUCCESS" },
       include: [
         {
           model: Booking,
           as: "booking",
-          required: true,
           attributes: [],
+          required: true,
           include: [
             {
               model: Event,
               as: "event",
-              required: true,
               attributes: [],
+              required: true,
               where: { organizerId: hostId },
             },
           ],
         },
       ],
       raw: true,
+      subQuery: false,
     });
 
-    const totalRevenue = Number(revenueRow?.totalNet || 0);
-
-    // 4) Wallet balance for host (if wallet model exists)
-    let walletBalance = null;
-    const wallet = await Wallet.findOne({ where: { organizerId: hostId } });
-    if (wallet) {
-      walletBalance = Number(wallet.balanceAvailable || 0);
-    }
-
     return res.json({
-      totalRevenue,
-      activeEvents: activeEventsCount,
+      totalRevenue: Number(revenueRow.totalRevenue),
+      activeEvents,
       totalBookings,
-      walletBalance,
+      walletBalance: null,
     });
   } catch (err) {
     console.error("getHostMetrics error:", err);
@@ -277,8 +265,58 @@ const cancelHostEvent = async (req, res) => {
   }
 };
 
+const getHostBookings = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    let whereEvent = {};
+
+    // HOST → only own events
+    if (role === "HOST") {
+      whereEvent.organizerId = userId;
+    }
+
+    const bookings = await Booking.findAll({
+      attributes: [
+        "id",
+        "status",
+        "quantity",
+        "totalAmount", // ✅ IMPORTANT
+        "currency",
+        "createdAt",
+      ],
+      include: [
+        {
+          model: Event,
+          as: "event",
+          where: whereEvent,
+          attributes: ["id", "title", "organizerId"],
+        },
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: TicketType,
+          as: "ticketType",
+          attributes: ["id", "name", "price"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    return res.json({ bookings });
+  } catch (err) {
+    console.error("getHostBookings error:", err);
+    return res.status(500).json({ message: "Failed to load bookings" });
+  }
+};
+
 module.exports = {
   getHostMetrics,
   getHostEvents,
   cancelHostEvent,
+  getHostBookings,
 };

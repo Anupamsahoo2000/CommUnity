@@ -7,20 +7,20 @@ const {
   createClub,
   listClubs,
   getClub,
-  updateClub,
+  // updateClub,
   joinClub,
-  getClubMembers,
-  deleteClub,
+  // getClubMembers,
+  // deleteClub,
   leaveClub,
   getClubChat,
   postClubChat,
-  uploadClubBanner,
+  // uploadClubBanner,
 } = require("../controllers/clubController");
 const upload = require("../middleware/upload");
 
 // Public listing & details
 router.get("/", listClubs);
-router.get("/:id", getClub);
+router.get("/:id", authenticate(false), getClub);
 
 // Club chat
 router.get("/:id/chat", getClubChat);
@@ -31,23 +31,23 @@ router.post("/:id/chat", authenticate(), postClubChat);
 router.post("/", authenticate(), createClub);
 
 // Update: only club owner or ADMIN (middleware enforces)
-router.put("/:id", authenticate(), updateClub);
+// router.put("/:id", authenticate(), updateClub);
 
 // Delete: only club owner or ADMIN (middleware enforces)
 // supports ?force=true for cascade delete (controller handles that)
-router.delete("/:id", authenticate(), deleteClub);
+// router.delete("/:id", authenticate(), deleteClub);
 // Join club (authenticated)
 router.post("/:id/join", authenticate(), joinClub);
 
-router.post(
-  "/:id/banner",
-  authenticate(["HOST", "ADMIN"]),
-  upload.single("banner"),
-  uploadClubBanner
-);
+// router.post(
+//   "/:id/banner",
+//   authenticate(["HOST", "ADMIN"]),
+//   upload.single("banner"),
+//   uploadClubBanner
+// );
 
 // Members (requires authenticated)
-router.get("/:id/members", authenticate(), getClubMembers);
+// router.get("/:id/members", authenticate(), getClubMembers);
 router.post("/:id/leave", authenticate(), leaveClub);
 
 module.exports = router;

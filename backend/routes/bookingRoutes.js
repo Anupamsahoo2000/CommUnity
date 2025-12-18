@@ -7,6 +7,8 @@ const {
   getMyBookings,
   cancelBooking,
   expireStaleBookings,
+  updateBookingStatus,
+  deleteBooking,
 } = require("../controllers/bookingController");
 
 // Create a booking (requires auth)
@@ -20,5 +22,8 @@ router.post("/:id/cancel", authenticate(), cancelBooking);
 
 // Expire stale bookings (can be called by a cron job or manually)
 router.post("/expire-holds", expireStaleBookings);
+
+router.put("/:id/status", authenticate(["HOST", "ADMIN"]), updateBookingStatus);
+router.delete("/:id", authenticate(["HOST", "ADMIN"]), deleteBooking);
 
 module.exports = router;

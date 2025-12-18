@@ -172,20 +172,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const fieldEmail = document.getElementById("dash-field-email");
   const fieldRole = document.getElementById("dash-field-role");
   const fieldCity = document.getElementById("dash-field-city");
-  const fieldLat = document.getElementById("dash-field-lat");
-  const fieldLng = document.getElementById("dash-field-lng");
 
   const avatar = document.getElementById("dash-user-avatar");
   const nameSpan = document.getElementById("dash-user-name");
   const roleSpan = document.getElementById("dash-user-role");
+  const hostBtn = document.getElementById("host-dashboard-btn");
 
   const createEventSection = document.getElementById("create-event-section");
-  const createSectionToggleBtn = document.getElementById(
-    "create-event-toggle-btn"
-  );
-  const createFormWrap = document.getElementById("create-event-form-wrap");
-  const createForm = document.getElementById("create-event-form");
-  const ticketNameInput = document.getElementById("evt-ticket-name");
 
   function showAlert(type, message) {
     if (!alertBox) return;
@@ -245,8 +238,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (fieldEmail) fieldEmail.textContent = user.email || "—";
     if (fieldRole) fieldRole.textContent = user.role || "—";
     if (fieldCity) fieldCity.textContent = user.city || "—";
-    if (fieldLat) fieldLat.textContent = user.lat ?? "—";
-    if (fieldLng) fieldLng.textContent = user.lng ?? "—";
 
     // Top avatar + texts
     const displayName = user.name || user.email || "User";
@@ -264,6 +255,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         createEventSection.classList.add("hidden");
       }
+    }
+
+    if (!hostBtn) return;
+
+    if (user.role === "HOST") {
+      hostBtn.classList.remove("hidden");
+    } else {
+      hostBtn.classList.add("hidden");
     }
 
     // Keep LS user in sync
@@ -287,154 +286,5 @@ document.addEventListener("DOMContentLoaded", async () => {
       err?.response?.data?.message ||
       "Something went wrong while loading your profile.";
     showAlert("error", msg);
-  }
-
-  // ---------------- Create Event handler (with show/hide toggle) ----------------
-
-  // Show form when toggle button clicked (only meaningful if section is visible for HOST/ADMIN)
-  if (createSectionToggleBtn && createFormWrap) {
-    createSectionToggleBtn.addEventListener("click", () => {
-      if (createFormWrap.classList.contains("hidden")) {
-        createFormWrap.classList.remove("hidden");
-        setTimeout(
-          () =>
-            createFormWrap.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            }),
-          50
-        );
-      } else {
-        createFormWrap.classList.add("hidden");
-      }
-    });
-  }
-
-  // Cancel button inside form — hide form
-  const cancelBtn = document.getElementById("evt-cancel-btn");
-  if (cancelBtn && createFormWrap) {
-    cancelBtn.addEventListener("click", () => {
-      createFormWrap.classList.add("hidden");
-    });
-  }
-
-  // Create event + optional default ticket type
-  if (createForm) {
-    
-    const btn = document.getElementById("evt-create-btn");
-    const resBox = document.getElementById("evt-create-result");
-    btn.addEventListener("click", async () => {
-      if (!btn) return;
-      btn.disabled = true;
-      btn.textContent = "Creating...";
-
-      if (resBox) {
-        resBox.classList.add("hidden");
-        resBox.textContent = "";
-      }
-
-      const title = document.getElementById("evt-title")?.value?.trim();
-      const category = document.getElementById("evt-category")?.value;
-      const city = document.getElementById("evt-city")?.value?.trim();
-      const location = document.getElementById("evt-location")?.value?.trim();
-      const startTime = document.getElementById("evt-start")?.value;
-      const endTime = document.getElementById("evt-end")?.value;
-      const maxSeats = document.getElementById("evt-seats")?.value;
-      const price = document.getElementById("evt-price")?.value;
-      const description = document.getElementById("evt-desc")?.value;
-      const publish = document.getElementById("evt-publish")?.checked;
-
-      // Basic validation
-      if (!title || !startTime) {
-        if (resBox) {
-          resBox.classList.remove("hidden");
-          resBox.className = "text-sm text-red-600 mt-2";
-          resBox.textContent = "Title and start time are required.";
-        }
-        btn.disabled = false;
-        btn.textContent = "Create Event";
-        return;
-      }
-
-      const payload = {
-        title,
-        description: description || undefined,
-        category: category || undefined,
-        city: city || undefined,
-        location: location || undefined,
-        startTime: startTime ? new Date(startTime).toISOString() : undefined,
-        endTime: endTime ? new Date(endTime).toISOString() : undefined,
-        maxSeats: maxSeats ? Number(maxSeats) : undefined,
-        isFree: price === "" || Number(price) === 0,
-        basePrice: price ? Number(price) : 0,
-        status: publish ? "PUBLISHED" : "DRAFT",
-      };
-
-      try {
-        const r = await axios.post("/events", payload);
-        const created = r?.data?.event || r?.data;
-
-        if (created) {
-          // 1) Try creating a default ticket type if ticket name is provided
-          const ticketName = ticketNameInput?.value?.trim();
-          const seatsNum = maxSeats ? Number(maxSeats) : null;
-          const priceNum = price ? Number(price) : 0;
-
-          if (ticketName && created.id && seatsNum && seatsNum > 0) {
-            try {
-              await axios.post(`/events/${created.id}/tickets`, {
-                name: ticketName,
-                price: priceNum,
-                quota: seatsNum,
-              });
-            } catch (ticketErr) {
-              console.error("Default ticket create failed:", ticketErr);
-              if (resBox) {
-                resBox.classList.remove("hidden");
-                resBox.className = "text-sm text-amber-600 mt-2";
-                resBox.textContent =
-                  "Event created, but creating the default ticket type failed. You can add tickets later.";
-              }
-            }
-          }
-
-          // 2) Show success message if not already overridden
-          if (
-            resBox &&
-            (resBox.textContent === "" || resBox.classList.contains("hidden"))
-          ) {
-            resBox.classList.remove("hidden");
-            resBox.className = "text-sm text-emerald-600 mt-2";
-            resBox.textContent = "Event created successfully.";
-          }
-
-          // 3) Reset form lightly
-          createForm.reset();
-          if (createFormWrap) createFormWrap.classList.add("hidden");
-
-          // 4) Redirect to event details
-          if (created.id) {
-            setTimeout(() => {
-              window.location.href = `event.html?id=${created.id}`;
-            }, 800);
-          } else {
-            setTimeout(() => window.location.reload(), 800);
-          }
-        } else {
-          throw new Error("Unexpected create response.");
-        }
-      } catch (err) {
-        console.error("Create event failed:", err);
-        const msg = err?.response?.data?.message || "Failed to create event.";
-        if (resBox) {
-          resBox.classList.remove("hidden");
-          resBox.className = "text-sm text-red-600 mt-2";
-          resBox.textContent = msg;
-        }
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Create Event";
-      }
-    });
   }
 });

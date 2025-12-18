@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Create Club | CommUnity</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+
+  <body class="bg-slate-50 min-h-screen">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-sm px-6 py-3 flex justify-between items-center">
+      <div class="text-lg font-semibold text-primary-600">
+        <a href="index.html">CommUnity</a>
+      </div>
+      <a href="clubs.html" class="text-sm text-slate-600 hover:text-primary-600"
+        >Back to Clubs</a
+      >
+    </nav>
+
+    <!-- Page -->
+    <div class="max-w-3xl mx-auto px-4 py-10">
+      <h1 class="text-2xl font-bold mb-6">Create a Club</h1>
+
+      <div
+        id="form-error"
+        class="hidden mb-4 text-sm text-red-600 bg-red-50 p-3 rounded"
+      ></div>
+
+      <form
+        id="create-club-form"
+        class="bg-white rounded-xl shadow-sm p-6 space-y-5"
+      >
+        <!-- Club Name -->
+        <div>
+          <label class="block text-sm font-medium">Club Name *</label>
+          <input
+            id="name"
+            type="text"
+            required
+            class="mt-1 w-full px-3 py-2 border rounded-lg"
+            placeholder="Cycling Enthusiasts"
+          />
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-sm font-medium">Description</label>
+          <textarea
+            id="description"
+            rows="4"
+            class="mt-1 w-full px-3 py-2 border rounded-lg"
+            placeholder="Tell people what this club is about"
+          ></textarea>
+        </div>
+
+        <!-- Category + City -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium">Category</label>
+            <input
+              id="category"
+              type="text"
+              class="mt-1 w-full px-3 py-2 border rounded-lg"
+              placeholder="Sports / Tech / Music"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium">City</label>
+            <input
+              id="city"
+              type="text"
+              class="mt-1 w-full px-3 py-2 border rounded-lg"
+              placeholder="Bangalore"
+            />
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium">Latitude</label>
+            <input
+              id="lat"
+              type="number"
+              step="any"
+              class="mt-1 w-full px-3 py-2 border rounded-lg"
+              placeholder="12.9716"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium">Longitude</label>
+            <input
+              id="lng"
+              type="number"
+              step="any"
+              class="mt-1 w-full px-3 py-2 border rounded-lg"
+              placeholder="77.5946"
+            />
+          </div>
+        </div>
+
+        <!-- Banner -->
+        <div>
+          <label class="block text-sm font-medium">Banner Image URL</label>
+          <input
+            id="bannerUrl"
+            type="url"
+            class="mt-1 w-full px-3 py-2 border rounded-lg"
+            placeholder="https://example.com/banner.jpg"
+          />
+        </div>
+
+        <!-- Paid Membership -->
+        <div class="flex items-center gap-2">
+          <input id="isPaidMembership" type="checkbox" />
+          <label class="text-sm font-medium">Paid Membership</label>
+        </div>
+
+        <div id="membership-fee-wrap" class="hidden">
+          <label class="block text-sm font-medium">Membership Fee (₹)</label>
+          <input
+            id="membershipFee"
+            type="number"
+            min="0"
+            class="mt-1 w-full px-3 py-2 border rounded-lg"
+            placeholder="500"
+          />
+        </div>
+
+       
+
+        <!-- Submit -->
+        <div class="pt-4 flex justify-end">
+          <button
+            id="submit-btn"
+            type="submit"
+            class="px-6 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-primary-700"
+          >
+            Create Club
+          </button>
+        </div>
+      </form>
+    </div>
+
+       <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <!-- Create Club JS -->
+    <script src="js/create-club.js"></script>
+  </body>
+</html>
+
+  </body>
+</html>
