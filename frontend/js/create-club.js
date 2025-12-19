@@ -46,7 +46,7 @@ q("create-club-form").addEventListener("submit", async (e) => {
     lat: q("lat").value ? Number(q("lat").value) : null,
     lng: q("lng").value ? Number(q("lng").value) : null,
     bannerUrl: q("bannerUrl").value.trim() || null,
-    slug: q("slug").value.trim() || null,
+    // slug: q("slug").value.trim() || null,
     isPaidMembership: isPaidCheckbox.checked,
     membershipFee: isPaidCheckbox.checked
       ? Number(q("membershipFee").value || 0)

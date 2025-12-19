@@ -10,6 +10,8 @@ const {
   WalletTransaction,
   User,
   TicketType,
+  Club,
+  ClubMember,
 } = require("../models/sql");
 
 /**
@@ -72,6 +74,44 @@ const getHostMetrics = async (req, res) => {
   } catch (err) {
     console.error("getHostMetrics error:", err);
     return res.status(500).json({ message: "Failed to fetch host metrics" });
+  }
+};
+
+const getHostClubs = async (req, res) => {
+  try {
+    const hostId = req.user.id;
+
+    const clubs = await Club.findAll({
+      where: { ownerId: hostId },
+
+      include: [
+        {
+          model: ClubMember,
+          as: "memberships", // ✅ IMPORTANT
+          attributes: [],
+          where: { status: "ACTIVE" },
+          required: false,
+        },
+      ],
+
+      attributes: {
+        include: [
+          [
+            Club.sequelize.fn("COUNT", Club.sequelize.col("memberships.id")),
+            "memberCount",
+          ],
+        ],
+      },
+
+      group: ["Club.id"],
+      order: [["createdAt", "DESC"]],
+      subQuery: false,
+    });
+
+    res.json({ clubs });
+  } catch (err) {
+    console.error("getHostClubs error:", err);
+    res.status(500).json({ message: "Failed to load clubs" });
   }
 };
 
@@ -314,9 +354,41 @@ const getHostBookings = async (req, res) => {
   }
 };
 
+const deleteHostClub = async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    const hostId = req.user.id;
+
+    const club = await Club.findOne({
+      where: { id: clubId, ownerId: hostId },
+    });
+
+    if (!club) {
+      return res
+        .status(404)
+        .json({ message: "Club not found or not owned by you" });
+    }
+
+    // delete memberships
+    await ClubMember.destroy({ where: { clubId } });
+
+    // detach or delete events
+    await Event.update({ clubId: null }, { where: { clubId } });
+
+    await club.destroy();
+
+    res.json({ message: "Club deleted successfully" });
+  } catch (err) {
+    console.error("deleteHostClub error:", err);
+    res.status(500).json({ message: "Failed to delete club" });
+  }
+};
+
 module.exports = {
   getHostMetrics,
+  getHostClubs,
   getHostEvents,
   cancelHostEvent,
   getHostBookings,
+  deleteHostClub,
 };

@@ -191,7 +191,7 @@ window.deleteBooking = async (id) => {
 /* ===================== CLUBS (NEW) ===================== */
 
 async function fetchClubs() {
-  const r = await axios.get("/clubs");
+  const r = await axios.get("hosts/clubs");
   CLUBS = r.data.clubs || [];
   renderClubs();
 }
@@ -237,7 +237,7 @@ window.editClub = (id) => {
 
 window.deleteClub = async (id) => {
   confirmAction("Delete this club permanently?", async () => {
-    await axios.delete(`/clubs/${id}`);
+    await axios.delete(`/hosts/clubs/${id}`);
     fetchClubs();
   });
 };
