@@ -851,25 +851,28 @@ function appendChatMessageWithSmart(msg) {
 function showPredictiveSuggestions(items) {
   const container = qsel("chat-ai-suggestions");
   if (!container) return;
+
   container.innerHTML = "";
+
   if (!items || !items.length) {
     container.classList.add("hidden");
     return;
   }
+
   container.classList.remove("hidden");
 
-  items.forEach((it) => {
+  items.forEach((text) => {
     const btn = document.createElement("button");
-    btn.className =
-      "px-2 py-1 text-xs text-black rounded bg-slate-100 hover:bg-slate-200";
-    btn.textContent = it;
-    btn.addEventListener("click", () => {
+    btn.className = "px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200";
+    btn.textContent = text;
+
+    btn.onclick = () => {
       const input = qsel("chat-input");
-      if (!input) return;
-      input.value = input.value ? input.value + " " + it : it;
+      input.value = input.value ? input.value + " " + text : text;
       input.focus();
       container.classList.add("hidden");
-    });
+    };
+
     container.appendChild(btn);
   });
 }

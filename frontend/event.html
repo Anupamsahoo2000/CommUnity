@@ -238,7 +238,7 @@
             <!-- CHAT WIDGET -->
             <div
               id="chat-widget"
-              class="hidden fixed bottom-6 right-6 w-80 bg-white rounded-2xl shadow-lg overflow-hidden z-50"
+              class="hidden relative fixed bottom-6 right-6 w-80 bg-white rounded-2xl shadow-lg overflow-hidden z-50"
             >
               <!-- Header -->
               <div class="p-3 border-b flex justify-between items-center">
@@ -255,6 +255,11 @@
               <div
                 id="chat-messages"
                 class="p-3 h-64 text-black overflow-y-auto text-sm space-y-2"
+              ></div>
+
+              <div
+                id="chat-ai-suggestions"
+                class="hidden absolute bottom-full mb-2 left-0 right-0 flex gap-2 flex-wrap bg-white border rounded-lg p-2 shadow-lg z-50"
               ></div>
 
               <!-- Input -->
@@ -279,11 +284,6 @@
                 >
                   Someone is typing...
                 </div>
-
-                <div
-                  id="chat-ai-suggestions"
-                  class="mt-2 flex flex-wrap gap-2 bg-gray-600 text-white border p-2 rounded shadow absolute z-50"
-                ></div>
               </div>
             </div>
           </div>
