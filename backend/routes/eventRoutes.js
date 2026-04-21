@@ -17,9 +17,10 @@ const {
 } = require("../controllers/eventController");
 const authenticate = require("../middleware/jwt");
 const upload = require("../middleware/upload");
+const cacheMiddleware = require("../middleware/cacheMiddleware");
 
-// Public list
-router.get("/", getEvents);
+// Public list (cache for 60 seconds to balance freshness and performance)
+router.get("/", cacheMiddleware(60), getEvents);
 
 // Public tickets & seats
 router.get("/:id/tickets", getEventTickets);

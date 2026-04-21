@@ -8,6 +8,7 @@ const {
 const { getIo } = require("../config/socket");
 const path = require("path");
 const { uploadPublicFile } = require("../utils/s3");
+const client = require("../config/redis");
 
 /* ===================== HELPERS ===================== */
 
@@ -103,6 +104,8 @@ const createClub = async (req, res) => {
     );
 
     await t.commit();
+    client.clear("cache:/clubs*");
+
     return res.status(201).json({ club });
   } catch (err) {
     await t.rollback();
@@ -246,6 +249,10 @@ const joinClub = async (req, res) => {
         status: "ACTIVE",
       },
     });
+    
+    // reset cache
+    client.clear(`cache:/clubs/${clubId}*`);
+    client.clear("cache:/clubs*");
 
     return res.status(201).json({ membership });
   } catch (err) {
@@ -276,6 +283,10 @@ const leaveClub = async (req, res) => {
     }
 
     await membership.update({ status: "LEFT" });
+    
+    // reset cache
+    client.clear(`cache:/clubs/${clubId}*`);
+    client.clear("cache:/clubs*");
 
     return res.json({ message: "Left club successfully" });
   } catch (err) {

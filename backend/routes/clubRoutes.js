@@ -17,10 +17,11 @@ const {
   // uploadClubBanner,
 } = require("../controllers/clubController");
 const upload = require("../middleware/upload");
+const cacheMiddleware = require("../middleware/cacheMiddleware");
 
 // Public listing & details
-router.get("/", listClubs);
-router.get("/:id", authenticate(false), getClub);
+router.get("/", cacheMiddleware(120), listClubs);
+router.get("/:id", authenticate(false), cacheMiddleware(120), getClub);
 
 // Club chat
 router.get("/:id/chat", getClubChat);

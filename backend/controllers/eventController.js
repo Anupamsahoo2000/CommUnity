@@ -15,6 +15,7 @@ const {
 const { getIo } = require("../config/socket");
 const path = require("path");
 const { uploadPublicFile } = require("../utils/s3");
+const client = require("../config/redis"); // redis cache
 
 // If your service file is named differently, update the path above.
 
@@ -254,6 +255,9 @@ const createEvent = async (req, res) => {
       });
     }
 
+    // clear cache
+    client.clear("cache:/events*");
+
     return res.status(201).json({ event });
   } catch (err) {
     console.error("createEvent error:", err);
@@ -355,6 +359,10 @@ const updateEvent = async (req, res) => {
     if (status !== undefined) updates.status = status;
 
     await event.update(updates);
+
+    // reset cache
+    client.clear("cache:/events*");
+    client.clear(`cache:/events/${id}*`);
 
     return res.json({ event });
   } catch (err) {
@@ -728,10 +736,12 @@ const cancelEvent = async (req, res) => {
 
     /**
      * 🔜 Future enhancements:
-     * - Refund CONFIRMED bookings
-     * - Release seats via seatsService
      * - Notify users (email / socket)
      */
+
+    // clear cache
+    client.clear("cache:/events*");
+    client.clear(`cache:/events/${eventId}*`);
 
     return res.json({
       message: "Event cancelled successfully",

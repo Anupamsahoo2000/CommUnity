@@ -102,20 +102,27 @@ async function getEventTicketsWithAvailability(eventId, options = {}) {
   };
 }
 
+const client = require("../config/redis");
+
 /**
  * Lightweight summary for /api/events/:id/seats
+ * Caches in redis for 10s to speed up polling
  */
 async function getEventSeatsSummary(eventId, options = {}) {
-  const { tickets, summary } = await getEventTicketsWithAvailability(
-    eventId,
-    options
-  );
+  const key = `cache:seats:${eventId}`;
 
-  return {
-    eventId,
-    tickets,
-    ...summary,
-  };
+  try {
+    const cached = await client.get(key);
+    if (cached) return JSON.parse(cached);
+  } catch (e) {}
+
+  const { tickets, summary } = await getEventTicketsWithAvailability(eventId, options);
+
+  const res = { eventId, tickets, ...summary };
+
+  client.set(key, JSON.stringify(res), "EX", 10).catch(() => {});
+
+  return res;
 }
 
 /**
